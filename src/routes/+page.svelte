@@ -24,7 +24,7 @@
     import {resolveIconUrl} from "$lib/iconResolver";
     import {invoke} from "@tauri-apps/api/core";
 
-    const appWindow = getCurrentWindow();
+    let appWindow;
     let searchInput: HTMLInputElement | null = null;
     let nameInput: HTMLInputElement | null = null;
     let icon: string = 'bash';
@@ -113,7 +113,7 @@
      */
     async function copy(cmd: string) {
         await writeText(cmd);
-        await appWindow.hide();
+        await appWindow?.hide();
     }
 
     /**
@@ -133,7 +133,7 @@
         // Escape → close
         if (e.key === "Escape") {
             e.preventDefault();
-            appWindow.hide();
+            appWindow?.hide();
         }
 
         // pour éviter de toogle si l'on tape + dans l'input
@@ -305,6 +305,7 @@
      */
     onMount(async () => {
         console.log("🟢 Svelte mounted");
+        appWindow = getCurrentWindow();
         const list_icons = await invoke<string[]>("list_user_icons");
         userIcons = new Set(list_icons);
 
@@ -317,7 +318,7 @@
         // focus initial
         focusInput(searchInput);
         // 🔥 focus à chaque affichage de la fenêtre
-        const unlisten = await appWindow.listen("tauri://focus", () => {
+        const unlisten = await appWindow?.listen("tauri://focus", () => {
             focusInput(searchInput);
         });
         return () => {
@@ -431,14 +432,14 @@
     </div>
 
     <div class="command-grid">
-        {#each Object.entries(grouped) as [icon, cmds]}
+        {#each Object.entries(grouped) as [groupedIcon, cmds]}
             <div class="command-group">
                 <h5 class="bg-dark-subtle  bg-gradient rounded">
-                    <img src="{resolveIconUrl(icon, userIcons)}"
+                    <img src="{resolveIconUrl(groupedIcon, userIcons)}"
                          width="40"
                          height="40"
                          class="p-2"/>
-                    {icon}
+                    {groupedIcon}
                 </h5>
                 <ListGroup class="commands-list">
 
