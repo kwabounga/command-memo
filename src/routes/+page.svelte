@@ -1,4 +1,5 @@
 <script lang="ts">
+    console.log("PAGE SCRIPT LOADED");
     import {onMount} from "svelte";
     import {addCommand, deleteCommand, getCommands} from "$lib/db";
     import {writeText} from "@tauri-apps/plugin-clipboard-manager";
