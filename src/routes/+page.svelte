@@ -22,7 +22,7 @@
 
     import {icons} from "$lib/icons";
     import {resolveIconUrl} from "$lib/iconResolver";
-    import {convertFileSrc, invoke} from "@tauri-apps/api/core";
+    import {invoke} from "@tauri-apps/api/core";
 
     const appWindow = getCurrentWindow();
     let searchInput: HTMLInputElement | null = null;
