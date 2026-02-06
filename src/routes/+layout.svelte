@@ -3,7 +3,7 @@
 </script>
 
 <Styles theme="dark"/>
-<slot />
+
 <style>
     :root {
         --offset-main: 75px;
@@ -39,3 +39,4 @@
         max-height: 25rem;
     }
 </style>
+<slot />

@@ -4,6 +4,7 @@
     import {addCommand, deleteCommand, getCommands} from "$lib/db";
     import {writeText} from "@tauri-apps/plugin-clipboard-manager";
     import {getCurrentWindow} from "@tauri-apps/api/window";
+    import { enable, disable, isEnabled,  } from "@tauri-apps/plugin-autostart";
     import {
         Button,
         ButtonGroup,
@@ -40,7 +41,7 @@
     let showHelpModal = false;
     let showDeleteModal = false;
     let commandToDelete: { id: number; name: string } | null = null;
-
+    let enabled: boolean = false;
     let userIcons: Set<string> = new Set();
     let allIcons = [...icons, ...userIcons];
 
@@ -195,7 +196,16 @@
         showDeleteModal = false;
         commandToDelete = null;
     }
-
+    /**
+     * toogle autostart
+     */
+    async function toggleAutoStart(enabled: boolean) {
+        if(enabled) {
+            await enable();
+        }else{
+            await disable();
+        }
+    }
     /**
      * confirm delete action and close Modal
      */
@@ -208,7 +218,7 @@
         closeDeleteModal();
     }
 
-    /*    seed ( dev only )  */
+    /*    seed ( dev only )
     async function seedDatabase() {
         const icons = [
             'nim',
@@ -283,9 +293,9 @@
         await refresh();
         console.log("✅ Seed terminé");
     }
+*/
 
-
-    /*  delete all ( dev only )*/
+    /*  delete all ( dev only )
     async function deleteAll() {
         if (!confirm("⚠️ Supprimer TOUTES les commandes ?")) return;
 
@@ -299,7 +309,7 @@
         await refresh();
         console.log("✅ Database cleared");
     }
-
+*/
 
     /**
      * entry point
@@ -322,6 +332,9 @@
         const unlisten = await appWindow?.listen("tauri://focus", () => {
             focusInput(searchInput);
         });
+        // autostart ?
+        enabled = await isEnabled();
+
         return () => {
             window.removeEventListener("keydown", handleKeydown);
             unlisten();
@@ -334,14 +347,21 @@
 <Container fluid="true" class="main-wrapper">
     {#if showAdd}
         <Row noGutters="true" class="add-part mb-2">
-                 Seed Db (dev Only)
-            <Button color="warning" bsSize="sm" on:click={seedDatabase}>
-                🌱 Seed DB (DEV)
-            </Button>
-                 Delete All (dev Only)
-            <Button color="danger" bsSize="sm" on:click={deleteAll}>
-                🧨 Delete ALL (DEV)
-            </Button>
+<!--                 Seed Db (dev Only)-->
+<!--            <Button color="warning" bsSize="sm" on:click={seedDatabase}>-->
+<!--                🌱 Seed DB (DEV)-->
+<!--            </Button>-->
+<!--                 Delete All (dev Only)-->
+<!--            <Button color="danger" bsSize="sm" on:click={deleteAll}>-->
+<!--                🧨 Delete ALL (DEV)-->
+<!--            </Button>-->
+            <InputGroup bsSize="sm" class="mb-2">
+                <Input type="checkbox"
+                       bind:checked={enabled}
+                       on:change={() => toggleAutoStart(enabled)}
+                />
+                <span class="text-light">Lancer au démarrage</span>
+            </InputGroup>
             <Card class="p-3" theme="light">
                 <Input id="name-input" name="name-input" placeholder="Nom" innerRef={nameInput} bind:value={name}
                        class="mb-2"/>

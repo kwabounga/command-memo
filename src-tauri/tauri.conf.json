@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "command-memo",
+  "productName": "Command memo",
   "version": "0.1.0",
   "identifier": "com.jychaillou.command-memo",
   "build": {
@@ -32,7 +32,7 @@
         "connect-src": "ipc: http://ipc.localhost",
         "font-src": ["https://fonts.gstatic.com"],
         "img-src": "'self' asset: http://asset.localhost blob: data:",
-        "style-src": "'unsafe-inline' 'self' https://fonts.googleapis.com"
+        "style-src": "'unsafe-inline' 'self'  asset: https://fonts.googleapis.com https://cdn.jsdelivr.net"
       },
       "capabilities": ["main"],
       "assetProtocol": {
@@ -53,11 +53,18 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "kwabounga",
+
+    "category": "Utility",
+
+    "shortDescription": "Clipboard command launcher",
+    "longDescription": "Quick command memo & launcher"
   },
   "plugins": {
     "clipboard-manager": null,
     "sql": null,
-    "global-shortcut": null
+    "global-shortcut": null,
+    "autostart": null
   }
 }

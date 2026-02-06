@@ -12,6 +12,11 @@ const config = {
     adapter: adapter({
       fallback: "index.html",
     }),
+      paths: {
+          base: "",
+          assets: "",
+          relative: true
+      }
   },
 };
 

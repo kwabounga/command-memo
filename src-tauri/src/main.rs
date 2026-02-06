@@ -28,6 +28,7 @@ use tauri::{
 use tauri_plugin_global_shortcut::{GlobalShortcut, ShortcutState, Shortcut };
 use tauri_plugin_sql::{Builder, Migration, MigrationKind};
 use tauri_plugin_clipboard_manager;
+use tauri_plugin_autostart;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -92,7 +93,10 @@ fn main() {
     tauri::Builder::default()
         // ✅ Clipboard Manager
         .plugin(tauri_plugin_clipboard_manager::init())
-
+        .plugin(tauri_plugin_autostart::init(
+                tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+                None
+            ))
         // ✅ Global Shortcut
         .plugin(tauri_plugin_global_shortcut::Builder::new()
         .with_handler(move |app, shortcut, event| {
