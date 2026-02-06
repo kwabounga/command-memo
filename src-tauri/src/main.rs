@@ -2,8 +2,12 @@
 
 use serde::Deserialize;
 
-fn default_offset_x() -> i32 { -9 }
-fn default_offset_y() -> i32 { -1 }
+fn default_offset_x() -> i32 {
+    -9
+}
+fn default_offset_y() -> i32 {
+    -1
+}
 
 #[derive(Debug, Deserialize)]
 struct AppConfig {
@@ -16,30 +20,24 @@ struct AppConfig {
     offset_y: i32,
 }
 
-
-
 use once_cell::sync::Lazy;
-use tauri::{
-    Manager, WindowEvent,
-    Wry,
-    menu::{MenuBuilder, MenuItemBuilder},
-    tray::{TrayIconBuilder, TrayIconEvent, MouseButtonState, MouseButton},
-};
-use tauri_plugin_global_shortcut::{GlobalShortcut, ShortcutState, Shortcut };
-use tauri_plugin_sql::{Builder, Migration, MigrationKind};
-use tauri_plugin_clipboard_manager;
-use tauri_plugin_autostart;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
-use tauri::PhysicalPosition;
 use tauri::path::BaseDirectory;
+use tauri::PhysicalPosition;
+use tauri::{
+    menu::{MenuBuilder, MenuItemBuilder},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Manager, WindowEvent, Wry,
+};
+use tauri_plugin_autostart;
+use tauri_plugin_clipboard_manager;
+use tauri_plugin_global_shortcut::{GlobalShortcut, Shortcut, ShortcutState};
+use tauri_plugin_sql::{Builder, Migration, MigrationKind};
 
 fn ensure_icon_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
-    let dir = app
-        .path()
-        .resolve("icons", BaseDirectory::AppData)
-        .unwrap();
+    let dir = app.path().resolve("icons", BaseDirectory::AppData).unwrap();
 
     std::fs::create_dir_all(&dir).ok();
     dir
@@ -48,20 +46,15 @@ fn ensure_icon_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
 fn load_config() -> AppConfig {
     let path = PathBuf::from("config.json");
 
-    let content = fs::read_to_string(&path)
-        .unwrap_or_else(|_| {
-            println!("⚠️ config.json not found, using default shortcut");
-            r#"{"shortcut":"CmdOrControl+Alt+Space","offset_x":-9,"offset_y":-1}"#.to_string()
-        });
+    let content = fs::read_to_string(&path).unwrap_or_else(|_| {
+        println!("⚠️ config.json not found, using default shortcut");
+        r#"{"shortcut":"CmdOrControl+Alt+Space","offset_x":-9,"offset_y":-1}"#.to_string()
+    });
 
-    serde_json::from_str(&content)
-        .expect("❌ invalid config.json format")
+    serde_json::from_str(&content).expect("❌ invalid config.json format")
 }
 
-static CONFIG: Lazy<AppConfig> = Lazy::new(|| {
-    load_config()
-});
-
+static CONFIG: Lazy<AppConfig> = Lazy::new(|| load_config());
 
 #[tauri::command]
 fn list_user_icons(app: tauri::AppHandle) -> Vec<String> {
@@ -79,61 +72,54 @@ fn list_user_icons(app: tauri::AppHandle) -> Vec<String> {
 
 #[tauri::command]
 fn get_user_icon_dir(app: tauri::AppHandle) -> String {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .unwrap()
-        .join("icons");
+    let dir = app.path().app_data_dir().unwrap().join("icons");
 
     dir.to_string_lossy().to_string()
 }
 
-
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::Builder::new().build())
         // ✅ Clipboard Manager
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_autostart::init(
-                tauri_plugin_autostart::MacosLauncher::LaunchAgent,
-                None
-            ))
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         // ✅ Global Shortcut
-        .plugin(tauri_plugin_global_shortcut::Builder::new()
-        .with_handler(move |app, shortcut, event| {
-                // println!("{:?}", shortcut);
-                match event.state {
-                    ShortcutState::Pressed => {
-                        println!("🔵 Pressed: {:?}", shortcut);
-                        let window = app.get_webview_window("main").unwrap();
-                        // ici tu peux show/hide la fenêtre
-                        let visible = window.is_visible().unwrap_or(false);
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(move |app, shortcut, event| {
+                    // println!("{:?}", shortcut);
+                    match event.state {
+                        ShortcutState::Pressed => {
+                            println!("🔵 Pressed: {:?}", shortcut);
+                            let window = app.get_webview_window("main").unwrap();
+                            // ici tu peux show/hide la fenêtre
+                            let visible = window.is_visible().unwrap_or(false);
                             if visible {
                                 let _ = window.hide();
                             } else {
                                 let _ = show_on_active_monitor(app, &window);
                             }
+                        }
+                        ShortcutState::Released => {
+                            println!("⚪ Released: {:?}", shortcut);
+                        }
                     }
-                    ShortcutState::Released => {
-                        println!("⚪ Released: {:?}", shortcut);
-                    }
-                }
-        }).build())
-
-        .invoke_handler(tauri::generate_handler![
-            get_user_icon_dir,
-            list_user_icons,
-        ])
-
+                })
+                .build(),
+        )
+        .invoke_handler(tauri::generate_handler![get_user_icon_dir, list_user_icons,])
         // ✅ SQL plugin
         .plugin(
             Builder::default()
                 .add_migrations(
                     "sqlite:commands.db",
-                    vec![
-                        Migration {
-                            version: 1,
-                            description: "create commands table",
-                            sql: "
+                    vec![Migration {
+                        version: 1,
+                        description: "create commands table",
+                        sql: "
                                 CREATE TABLE IF NOT EXISTS commands (
                                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                                     name TEXT NOT NULL,
@@ -142,21 +128,17 @@ fn main() {
                                     icon TEXT
                                 );
                             ",
-                            kind: MigrationKind::Up,
-                        }
-                    ],
-
-
+                        kind: MigrationKind::Up,
+                    }],
                 )
                 .build(),
         )
         .setup(|app| {
-
             let window = app.get_webview_window("main").unwrap();
 
             /* shortcut part  */
-            let custom_shortcut = Shortcut::from_str(&CONFIG.shortcut)
-                .expect("Invalid shortcut in config");
+            let custom_shortcut =
+                Shortcut::from_str(&CONFIG.shortcut).expect("Invalid shortcut in config");
             // ✅ CRUCIAL POUR WINDOWS
             window.set_decorations(false)?;
 
@@ -172,11 +154,12 @@ fn main() {
             }
             /* !shortcut part  */
 
-
             /* tray part  */
             let show_app = MenuItemBuilder::with_id("show", "Show").build(app)?;
             let quit_app = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
-            let menu = MenuBuilder::new(app).items(&[&show_app,&quit_app]).build()?;
+            let menu = MenuBuilder::new(app)
+                .items(&[&show_app, &quit_app])
+                .build()?;
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
@@ -184,7 +167,7 @@ fn main() {
                     "show" => {
                         println!("🟢 Show application");
                         let _ = show_on_active_monitor(app, &window);
-                    },
+                    }
                     "quit" => {
                         println!("❌ Quit application");
                         app.exit(0);
@@ -193,42 +176,36 @@ fn main() {
                 })
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click {
-                            button: MouseButton::Left,
-                            button_state: MouseButtonState::Up,
-                            ..
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
                     } = event
                     {
                         let app = tray.app_handle();
                         if let Some(webview_window) = app.get_webview_window("main") {
-                           let _ = show_on_active_monitor(app, &webview_window);
+                            let _ = show_on_active_monitor(app, &webview_window);
                         }
                     }
                 })
                 .build(app)?;
 
-
             /* !tray part  */
             Ok(())
         })
-
         .on_window_event(|app, event| {
-            let custom_shortcut = Shortcut::from_str(&CONFIG.shortcut)
-                            .expect("Invalid shortcut in config");
+            let custom_shortcut =
+                Shortcut::from_str(&CONFIG.shortcut).expect("Invalid shortcut in config");
             if let WindowEvent::CloseRequested { .. } = event {
                 // Désenregistre la hotkey à la fermeture
                 let shortcuts = app.state::<GlobalShortcut<Wry>>();
                 let _ = shortcuts.unregister(custom_shortcut);
             }
         })
-
         .run(tauri::generate_context!())
         .expect("error while running tauri app");
 }
 
-
-fn monitor_from_cursor(
-    app: &tauri::AppHandle,
-) -> Option<tauri::Monitor> {
+fn monitor_from_cursor(app: &tauri::AppHandle) -> Option<tauri::Monitor> {
     let cursor_pos = app.cursor_position().ok()?;
 
     let monitors = app.available_monitors().ok()?;
@@ -247,8 +224,7 @@ fn show_on_active_monitor(
     app: &tauri::AppHandle,
     window: &tauri::WebviewWindow,
 ) -> tauri::Result<()> {
-    let monitor = monitor_from_cursor(app)
-        .or_else(|| window.primary_monitor().ok().flatten());
+    let monitor = monitor_from_cursor(app).or_else(|| window.primary_monitor().ok().flatten());
 
     if let Some(monitor) = monitor {
         let size = monitor.size();
@@ -256,7 +232,10 @@ fn show_on_active_monitor(
 
         window.set_position(PhysicalPosition::new(position.x, position.y))?;
         window.set_size(*size)?;
-        window.set_position(PhysicalPosition::new(position.x + &CONFIG.offset_x, position.y + &CONFIG.offset_y))?;
+        window.set_position(PhysicalPosition::new(
+            position.x + &CONFIG.offset_x,
+            position.y + &CONFIG.offset_y,
+        ))?;
     }
 
     window.show()?;
