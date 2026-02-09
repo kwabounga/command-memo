@@ -1,7 +1,7 @@
 # Command-Memo
 
 [![Node Version](https://img.shields.io/badge/node-v18+-green)](https://nodejs.org/)
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]
+[![Tauri Build & Release (Windows & Linux)](https://github.com/kwabounga/command-memo/actions/workflows/tauri-build.yml/badge.svg)](https://github.com/kwabounga/command-memo/actions/workflows/tauri-build.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)]
 
 **Command-Memo** est une application qui permet de prendre, organiser et retrouver facilement des mémos et commandes importantes. L’app combine la simplicité d’une note avec la puissance de l’organisation type “command prompt”.
@@ -115,4 +115,3 @@ npm run tauri build
 
 * Logo minimaliste et moderne pour app de notes
 * Interface inspirée des apps comme Notion, Google Keep
-* Palette de couleurs simple et lisible pour une UX claire

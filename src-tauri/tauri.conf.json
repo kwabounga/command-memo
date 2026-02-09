@@ -55,9 +55,7 @@
       "icons/icon.ico"
     ],
     "publisher": "kwabounga",
-
     "category": "Utility",
-
     "shortDescription": "Clipboard command launcher",
     "longDescription": "Quick command memo & launcher"
   },
