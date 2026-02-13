@@ -25,6 +25,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # -------------------------
+      # Extract version from tag
+      # -------------------------
+      - name: Extract version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+          echo "Detected version $VERSION"
+
+      # -------------------------
+      # Setup toolchains
+      # -------------------------
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -34,7 +46,9 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      # ---- Linux deps (Tauri + WebkitGTK)
+      # -------------------------
+      # Linux deps (Tauri + WebkitGTK)
+      # -------------------------
       - name: Install Linux deps
         if: runner.os == 'Linux'
         run: |
@@ -49,18 +63,55 @@ jobs:
             pkg-config \
             libssl-dev
 
+      # -------------------------
+      # Apply version (Linux/macOS)
+      # -------------------------
+      - name: Set versions (Unix)
+        if: runner.os != 'Windows' && env.VERSION != ''
+        run: |
+          echo "Patching versions to $VERSION"
+          npm version $VERSION --no-git-tag-version
+          sed -i 's/"version": *"[^"]*"/"version": "'$VERSION'"/' src-tauri/tauri.conf.json
+          sed -i 's/^version = .*/version = "'$VERSION'"/' src-tauri/Cargo.toml
+
+      # -------------------------
+      # Apply version (Windows)
+      # -------------------------
+      - name: Set versions (Windows)
+        if: runner.os == 'Windows' && env.VERSION != ''
+        shell: powershell
+        run: |
+          Write-Host "Patching versions to $env:VERSION"
+
+          npm version $env:VERSION --no-git-tag-version
+
+          (Get-Content src-tauri/tauri.conf.json) `
+            -replace '"version":\s*".*"', '"version": "'+$env:VERSION+'"' `
+            | Set-Content src-tauri/tauri.conf.json
+
+          (Get-Content src-tauri/Cargo.toml) `
+            -replace '^version = ".*"', 'version = "'+$env:VERSION+'"' `
+            | Set-Content src-tauri/Cargo.toml
+
+      # -------------------------
+      # Frontend deps
+      # -------------------------
       - name: Install frontend deps
         run: npm ci
 
-      # tauri.conf.json already runs beforeBuildCommand = npm run build
+      # tauri.conf.json contains beforeBuildCommand = npm run build
       - name: Build Tauri bundle
         run: npm run tauri build
 
+      # -------------------------
+      # Upload artifacts
+      # -------------------------
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: bundle-${{ matrix.os }}
           path: src-tauri/target/release/bundle
+
 
   release:
     needs: build
@@ -77,6 +128,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          generate_release_notes: true
           files: ./release/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
