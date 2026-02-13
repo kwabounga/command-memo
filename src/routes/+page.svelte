@@ -1,7 +1,9 @@
 <script lang="ts">
+    import IconSelect from "$lib/components/IconSelect.svelte";
+
     console.log("PAGE SCRIPT LOADED");
     import {onMount} from "svelte";
-    import {addCommand, deleteCommand, getCommands} from "$lib/db";
+    import {addCommand, deleteCommand, getCommands, updateCommand, updateCategorie} from "$lib/db";
     import {writeText} from "@tauri-apps/plugin-clipboard-manager";
     import {getCurrentWindow} from "@tauri-apps/api/window";
     import { enable, disable, isEnabled,  } from "@tauri-apps/plugin-autostart";
@@ -19,7 +21,8 @@
         ModalFooter,
         ModalHeader,
         Row,
-        Tooltip
+        Tooltip,
+        Icon
     } from '@sveltestrap/sveltestrap';
 
     import {icons} from "$lib/icons";
@@ -28,24 +31,45 @@
 
     let appWindow;
     let searchInput: HTMLInputElement | null = null;
-    let nameInput: HTMLInputElement | null = null;
-    let icon: string = 'bash';
+    // let nameInput: HTMLInputElement | null = null;
 
     let search = "";
-    let name = "";
-    let description = "";
-    let command = "";
+    // let name = "";
+    // let description = "";
+    // let command = "";
     let commands: any[] = [];
     let grouped: any[] = [];
     let showAdd = false;
+
+    // help modal
     let showHelpModal = false;
+
+    // delete modale
     let showDeleteModal = false;
     let commandToDelete: { id: number; name: string } | null = null;
-    let enabled: boolean = false;
+
+    // modify modal
+    let showModifyModal = false;
+    let commandToModify: { id: number; name: string; command: string; description: string; icon: string } | null = null;
+
+    let autoStartEnabled: boolean = false;
     let userIcons: Set<string> = new Set();
     let allIcons = [...icons, ...userIcons];
 
+
+    let icon: string = 'bash';
+
+    let formData = {
+        name: "",
+        description: "",
+        command: "",
+        icon
+    };
+
     import { initIconDir } from "$lib/iconResolver";
+    import CommandForm from "$lib/components/CommandForm.svelte";
+    import BaseModal from "$lib/components/BaseModal.svelte";
+    import CategoryHeader from "$lib/components/CategoryHeader.svelte";
     /* helper explanation */
     const helpCommands: any = [
         {
@@ -102,9 +126,9 @@
      * add command to database
      */
     async function add() {
-        if (!name || !command) return;
-        await addCommand(name, description, command, icon);
-        name = description = command = "";
+        if (!formData.name || !formData.command) return;
+        await addCommand(formData.name, formData.description, formData.command, formData.icon);
+        // name = description = command = "";
         toggleAdd();
         await refresh();
     }
@@ -176,7 +200,14 @@
     function toggleAdd() {
         showAdd = !showAdd;
         if (showAdd) {
-            focusInput(nameInput);
+            formData = {
+                name: "",
+                description: "",
+                command: "",
+                icon
+            };
+
+            // focusInput(nameInput);
         }
     }
 
@@ -188,6 +219,14 @@
         commandToDelete = command;
         showDeleteModal = true;
     }
+    /**
+     * open delete modale
+     * @param command
+     */
+    function openModifyModal(command: { id: number; name: string; command: string; description: string; icon: string }) {
+        commandToModify = command;
+        showModifyModal = true;
+    }
 
     /**
      * close delete modale
@@ -195,6 +234,26 @@
     function closeDeleteModal() {
         showDeleteModal = false;
         commandToDelete = null;
+    }
+
+    /**
+     * close delete modale
+     */
+    function closeModifyModal () {
+        showModifyModal = false;
+        commandToModify = null;
+    }
+
+    /**
+     * confirm delete action and close Modal
+     */
+    async function updateCommandHandler() {
+        if (!commandToModify) return;
+
+        await updateCommand(commandToModify);
+        await refresh();
+
+        closeModifyModal();
     }
     /**
      * toogle autostart
@@ -217,7 +276,24 @@
 
         closeDeleteModal();
     }
+    let categoryToModifyOld:string = "";
+    let categoryToModifyNew:string = "";
+    let modifyCategoryModalOpen:boolean = false;
+    function closeModifyCategoryModal(){
+        categoryToModifyOld = "";
+        categoryToModifyNew = ""
+        modifyCategoryModalOpen = false;
+    }
 
+    function showModifyCategoryModal(cat:string){
+        categoryToModifyOld = cat;
+        modifyCategoryModalOpen = true;
+    }
+    async function confirmModifyCategoryModal(){
+        await updateCategorie(categoryToModifyOld, categoryToModifyNew);
+        await refresh();
+        closeModifyCategoryModal()
+    }
     /*    seed ( dev only )
     async function seedDatabase() {
         const icons = [
@@ -321,6 +397,8 @@
         userIcons = new Set(list_icons);
 
         allIcons = [ ...userIcons, ...icons];
+        icon= allIcons[0] || 'bash';
+
          // get user icons Dir path
         await initIconDir();
         await refresh();
@@ -333,7 +411,7 @@
             focusInput(searchInput);
         });
         // autostart ?
-        enabled = await isEnabled();
+        autoStartEnabled = await isEnabled();
 
         return () => {
             window.removeEventListener("keydown", handleKeydown);
@@ -357,79 +435,18 @@
 <!--            </Button>-->
             <InputGroup bsSize="sm" class="mb-2">
                 <Input type="checkbox"
-                       bind:checked={enabled}
-                       on:change={() => toggleAutoStart(enabled)}
+                       bind:checked={autoStartEnabled}
+                       on:change={() => toggleAutoStart(autoStartEnabled)}
                 />
                 <span class="text-light">Lancer au démarrage</span>
             </InputGroup>
             <Card class="p-3" theme="light">
-                <Input id="name-input" name="name-input" placeholder="Nom" innerRef={nameInput} bind:value={name}
-                       class="mb-2"/>
-                <Tooltip
-                        animation
-                        content="un nom pour la commande"
-                        delay={0}
-                        id="name-input-tooltip"
-                        placement="auto"
-                        target="name-input"
-                        theme="light"
-                />
-                <InputGroup bsSize="sm" class="mb-2">
-                    <span
-                            class="input-group-text"
-                            id="icon-part"><img
-                            src="{resolveIconUrl(icon, userIcons)}"
-                            width="20"
-                            height="20"/>
-                    </span>
-                    <Input type="select"
-                           bsSize="sm"
-                           bind:value={icon}
-                           aria-label="Username"
-                           aria-describedby="icon-part">
-                        <option value="">— Icône —</option>
-                        {#each allIcons as i}
-                            <option value={i}>{i}</option>
-                        {/each}
-                    </Input>
-                </InputGroup>
-                <Input id="description-input"
-                       name="description-input"
-                       placeholder="Description"
-                       bind:value={description}
-                       class="mb-2"/>
-                <Tooltip
-                        animation
-                        content="description détaillée de la commande & utilisation"
-                        delay={0}
-                        id="description-input-tooltip"
-                        placement="auto"
-                        target="description-input"
-                        theme="light"
-                />
-                <Input id="cmd-input"
-                       name="cmd-input"
-                       placeholder="Commande"
-                       bind:value={command}
-                       class="mb-2"/>
-                <Tooltip
-                        animation
-                        content="la commande qui sera copié dans le clipboard"
-                        delay={0}
-                        id="cmd-input-tooltip"
-                        placement="auto"
-                        target="cmd-input"
-                        theme="light"
-                />
-                <Button on:click={add} id="btn-input">Ajouter</Button>
-                <Tooltip
-                        animation
-                        content="enregistrer la commande"
-                        delay={0}
-                        id="btn-input-tooltip"
-                        placement="auto"
-                        target="btn-input"
-                        theme="light"
+                <CommandForm
+                    bind:data={formData}
+                    {allIcons}
+                    {userIcons}
+                    submitLabel="Ajouter"
+                    onSubmit={add}
                 />
             </Card>
         </Row>
@@ -455,13 +472,33 @@
     <div class="command-grid">
         {#each Object.entries(grouped) as [groupedIcon, cmds]}
             <div class="command-group">
-                <h5 class="bg-dark-subtle  bg-gradient rounded">
-                    <img src="{resolveIconUrl(groupedIcon, userIcons)}"
-                         width="40"
-                         height="40"
-                         class="p-2"/>
-                    {groupedIcon}
-                </h5>
+<!--                <InputGroup bsSize="sm" class="mb-2 bg-dark-subtle  bg-gradient rounded" style="width:100%">-->
+<!--                    <span-->
+<!--                            class="input-group-text p-0"-->
+<!--                    ><img src="{resolveIconUrl(groupedIcon, userIcons)}"-->
+<!--                          width="40"-->
+<!--                          height="40"-->
+<!--                          class="p-2"/>-->
+<!--                    </span>-->
+
+<!--                    <span  class="input-group-text flex-grow-1"-->
+<!--                    >{groupedIcon}-->
+<!--                    </span>-->
+<!--                    <Button color="dark"-->
+<!--                            bsSize="sm"-->
+<!--                            on:click={() => showModifyCategoryModal(groupedIcon)}-->
+<!--                            >-->
+<!--                        <Icon name="pencil-fill" />-->
+<!--                    </Button>-->
+<!--                </InputGroup>-->
+                <CategoryHeader currentIcon={groupedIcon} userIconsSet={userIcons} onClick={showModifyCategoryModal}/>
+<!--                <h5 class="bg-dark-subtle  bg-gradient rounded">-->
+<!--                    <img src="{resolveIconUrl(groupedIcon, userIcons)}"-->
+<!--                         width="40"-->
+<!--                         height="40"-->
+<!--                         class="p-2"/>-->
+<!--                    {groupedIcon}-->
+<!--                </h5>-->
                 <ListGroup class="commands-list">
 
                     {#each cmds as c}
@@ -477,6 +514,9 @@
                                 <Button color="danger" bsSize="sm" on:click={() => openDeleteModal(c)} id="btn-cmd-delete-{c.id}">
                                     ✕
                                 </Button>
+                                <Button color="dark" bsSize="sm" on:click={() => openModifyModal(c)} id="btn-cmd-modify-{c.id}">
+                                    <Icon name="pencil-fill" />
+                                </Button>
                                 <Tooltip
                                         animation
                                         content="supprimer"
@@ -484,6 +524,15 @@
                                         id="tooltip-btn-cmd-delete-{c.id}"
                                         placement="auto"
                                         target="btn-cmd-delete-{c.id}"
+                                        theme="dark"
+                                />
+                                <Tooltip
+                                        animation
+                                        content="modifier"
+                                        delay={0}
+                                        id="tooltip-btn-cmd-modify-{c.id}"
+                                        placement="auto"
+                                        target="btn-cmd-modify-{c.id}"
                                         theme="dark"
                                 />
                                 <Tooltip
@@ -507,31 +556,68 @@
 <!-- !container -->
 
 <!--delete Modal-->
-<Modal isOpen={showDeleteModal} toggle={closeDeleteModal} centered>
-    <ModalHeader toggle={closeDeleteModal}>
-        Confirmer la suppression
-    </ModalHeader>
-
-    <ModalBody>
-        {#if commandToDelete}
-            <p>
-                Supprimer la commande :
-                <strong>{commandToDelete.name}</strong> ?
-            </p>
-        {/if}
-    </ModalBody>
-
-    <ModalFooter>
-        <Button color="secondary" on:click={closeDeleteModal}>
+<BaseModal open={showDeleteModal} onClose={closeDeleteModal} title="Confirmer">
+    {#if commandToDelete}
+        <p>
+            Supprimer la commande :
+            <strong>{commandToDelete.name}</strong> ?
+        </p>
+    {/if}
+    <div class="wrapper" slot="footer">
+        <Button color="warning" on:click={closeDeleteModal}>
             Annuler
         </Button>
 
         <Button color="danger" on:click={confirmDelete}>
             Supprimer
         </Button>
-    </ModalFooter>
-</Modal>
+    </div>
+</BaseModal>
 <!-- !delete Modal-->
+
+<!-- Modify Modal-->
+<BaseModal open={showModifyModal} onClose={closeModifyModal} title="Modification">
+    {#if commandToModify}
+        <CommandForm
+                bind:data={commandToModify}
+                {allIcons}
+                {userIcons}
+                submitLabel="Modifier"
+                onSubmit={updateCommandHandler}
+        />
+    {/if}
+
+    <Button color="secondary" on:click={closeModifyModal}>
+        Annuler
+    </Button>
+</BaseModal>
+<!-- !Modify Modal-->
+
+<!-- Modify Category Modal-->
+<BaseModal open={modifyCategoryModalOpen} onClose={closeModifyCategoryModal} title="Modification">
+    {#if categoryToModifyOld}
+        <p>
+            Modifier la categorie :
+            <strong>{categoryToModifyOld}</strong> ?
+        </p>
+        <IconSelect
+                bind:value={categoryToModifyNew}
+                icons={allIcons}
+                {userIcons}
+        />
+    {/if}
+
+    <div class="wrapper" slot="footer">
+        <Button color="secondary" on:click={closeModifyCategoryModal}>
+            Annuler
+        </Button>
+
+        <Button color="warning" on:click={confirmModifyCategoryModal}>
+            Modifier
+        </Button>
+    </div>
+</BaseModal>
+<!-- !Modify Category Modal-->
 
 <!--help Modal-->
 <Modal isOpen={showHelpModal} toggle={closeHelpModal} centered>

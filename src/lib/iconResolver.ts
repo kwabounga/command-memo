@@ -16,6 +16,8 @@ export async function initIconDir() {
 export function resolveIconUrl(icon: string, userIcons: Set<string>) {
     const filename = icon.endsWith(".svg") ? icon : `${icon}.svg`;
 
+    if (icon == '') return `/assets/undefined.svg`;
+
     if (!USER_ICON_DIR) return `/assets/svg/${filename}.svg`;
 
     if (userIcons.has(filename) && USER_ICON_DIR && convertFileSrcFn) {

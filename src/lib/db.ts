@@ -34,3 +34,36 @@ export async function deleteCommand(id: number) {
     const database = await getDb();
     await database.execute("DELETE FROM commands WHERE id = ?", [id]);
 }
+
+export async function updateCommand(cmd: {
+    id: number;
+    name: string;
+    command: string;
+    description: string;
+    icon: string;
+}) {
+    const database = await getDb();
+
+    await database.execute(
+    `
+      UPDATE commands
+      SET name = ?, description = ?, "command" = ?, icon = ?
+      WHERE id = ?
+    `,
+        [cmd.name, cmd.description, cmd.command, cmd.icon, cmd.id]
+    );
+}
+
+
+export async function updateCategorie(oldIcon:string, newIcon:string) {
+    const database = await getDb();
+
+    await database.execute(
+        `
+             UPDATE commands
+             SET icon = ?
+             WHERE icon = ?;
+        `,
+        [newIcon, oldIcon]
+    );
+}
