@@ -116,7 +116,8 @@ fn main() {
             Builder::default()
                 .add_migrations(
                     "sqlite:commands.db",
-                    vec![Migration {
+                    vec![
+                    Migration {
                         version: 1,
                         description: "create commands table",
                         sql: "
@@ -129,7 +130,46 @@ fn main() {
                                 );
                             ",
                         kind: MigrationKind::Up,
-                    }],
+                    },
+                    Migration {
+                        version: 2,
+                        description: "add workspaces and templates",
+                        sql: "
+                            -- workspaces
+                            CREATE TABLE IF NOT EXISTS workspaces (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                name TEXT NOT NULL UNIQUE
+                            );
+
+                            -- add workspace_id to commands
+                            ALTER TABLE commands
+                            ADD COLUMN workspace_id INTEGER;
+
+                            -- templates
+                            CREATE TABLE IF NOT EXISTS templates (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                name TEXT NOT NULL,
+                                description TEXT,
+                                content TEXT NOT NULL,
+                                icon TEXT,
+                                workspace_id INTEGER,
+                                FOREIGN KEY(workspace_id) REFERENCES workspaces(id)
+                            );
+
+                            -- template parameters
+                            CREATE TABLE IF NOT EXISTS template_params (
+                                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                template_id INTEGER NOT NULL,
+                                name TEXT NOT NULL,
+                                type TEXT NOT NULL,
+                                placeholder TEXT,
+                                description TEXT,
+                                FOREIGN KEY(template_id) REFERENCES templates(id)
+                            );
+                        ",
+                        kind: MigrationKind::Up,
+                    },
+                ],
                 )
                 .build(),
         )
@@ -152,6 +192,7 @@ fn main() {
                 Ok(_) => println!("✅ Hotkey enregistrée : {}", custom_shortcut),
                 Err(e) => eprintln!("⚠️ Impossible d'enregistrer la hotkey : {:?}", e),
             }
+
             /* !shortcut part  */
 
             /* tray part  */

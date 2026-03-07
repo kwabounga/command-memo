@@ -115,3 +115,37 @@ npm run tauri build
 
 * Logo minimaliste et moderne pour app de notes
 * Interface inspirée des apps comme Notion, Google Keep
+
+
+## côté utilisateur
+
+En fonction de l'os cible le dossier 'utilisateur' de l'application 
+ce trouve :
+
+| Os                    | Path                                                          |
+|-----------------------|---------------------------------------------------------------|
+| `linux`               | /home/<user>/.local/share/com.jychaillou.command-memo/        |
+| `windows`             | C:\Users\<user>\AppData\Roaming\com.jychaillou.command-memo\  |
+
+### icons
+Pour ajouter des icons personnalisés, mettre des icon.svg dans :
+<dossier utilisateur>/icons
+### Config
+```json
+
+{ 
+    "shortcut": "CmdOrControl+Alt+F12", 
+    "offset_x": -9, 
+    "offset_y": -1 
+} 
+```
+#### shortcuts
+pour les raccourcis / shortcuts, si le raccourci par default (Ctrl+Alt+Espace) est déja pris par le système,
+vous avez la possibilité de mettre un fichier config.json à côté de l'application pour surcharger la config
+
+un listing ce trouve ici :
+https://github.com/tauri-apps/global-hotkey/blob/c9913a97667b3e44cb000de384cd8937d5a0050a/src/hotkey.rs#L212
+
+#### offset 
+en fonction de l'écran des ajustements ( décalages ) sont peut-être à faire sur votre os 
+

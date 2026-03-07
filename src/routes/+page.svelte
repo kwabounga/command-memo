@@ -21,6 +21,7 @@
         ModalFooter,
         ModalHeader,
         Row,
+        Col,
         Tooltip,
         Icon
     } from '@sveltestrap/sveltestrap';
@@ -56,7 +57,7 @@
     let userIcons: Set<string> = new Set();
     let allIcons = [...icons, ...userIcons];
 
-
+    let currentWorkspace = null;
     let icon: string = 'bash';
 
     let formData = {
@@ -108,7 +109,7 @@
      * reload data from database
      */
     async function refresh() {
-        commands = await getCommands(search);
+        commands = await getCommands(search, currentWorkspace);
 
         grouped = commands.reduce((acc, cmd) => {
             const key = cmd.icon || "default";
@@ -425,6 +426,7 @@
 <Container fluid="true" class="main-wrapper">
     {#if showAdd}
         <Row noGutters="true" class="add-part mb-2">
+
 <!--                 Seed Db (dev Only)-->
 <!--            <Button color="warning" bsSize="sm" on:click={seedDatabase}>-->
 <!--                🌱 Seed DB (DEV)-->
@@ -440,15 +442,22 @@
                 />
                 <span class="text-light">Lancer au démarrage</span>
             </InputGroup>
-            <Card class="p-3" theme="light">
-                <CommandForm
-                    bind:data={formData}
-                    {allIcons}
-                    {userIcons}
-                    submitLabel="Ajouter"
-                    onSubmit={add}
-                />
-            </Card>
+            <Col xs="12" md="6" lg="9">
+                <Card class="p-3" theme="light">
+                    <CommandForm
+                            bind:data={formData}
+                            {allIcons}
+                            {userIcons}
+                            submitLabel="Ajouter"
+                            onSubmit={add}
+                    />
+                </Card>
+            </Col>
+            <Col xs="12" md="6" lg="3">
+                <Card class="p-3" theme="light">
+                    Add Workspace here
+                </Card>
+            </Col>
         </Row>
     {/if}
     <div class="search mb-4">
