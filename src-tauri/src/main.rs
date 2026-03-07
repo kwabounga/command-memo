@@ -169,6 +169,15 @@ fn main() {
                         ",
                         kind: MigrationKind::Up,
                     },
+                    Migration {
+                        version: 3,
+                        description: "add workspace save",
+                        sql: "
+                            -- workspaces
+                            ALTER TABLE workspaces ADD COLUMN last_used INTEGER DEFAULT 0;
+                        ",
+                        kind: MigrationKind::Up,
+                    },
                 ],
                 )
                 .build(),

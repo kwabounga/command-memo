@@ -1,4 +1,7 @@
+import { GLOBAL_WORKSPACE } from "$lib/stores/workspace";
+
 let db: any = null;
+
 
 async function getDb() {
     if (db) return db;
@@ -17,6 +20,8 @@ async function getDb() {
 /////////////////////////////
 
 export async function getCommands(search = "", workspaceId = null) {
+    console.log('get commands')
+    console.log(workspaceId);
     const database = await getDb();
 
     return database.select(
@@ -108,13 +113,14 @@ export async function getWorkspaces() {
 export async function addWorkspace(name: string) {
     const database = await getDb();
 
-    await database.execute(
+    const ws = await database.execute(
         `
         INSERT INTO workspaces (name)
         VALUES (?)
         `,
         [name]
     );
+    return setCurrentWorkspace(ws.id);
 }
 
 export async function deleteWorkspace(id: number) {
@@ -138,7 +144,74 @@ export async function updateWorkspace(id: number, name: string) {
         [name, id]
     );
 }
+// la partie workspace 'courant'
+// export async function getCurrentWorkspace() {
+//     const database = await getDb();
+//
+//     const rows = await database.select(`
+//         SELECT *
+//         FROM workspaces
+//         ORDER BY last_used DESC
+//         LIMIT 1
+//     `);
+//
+//     return rows[0] ?? null;
+// }
 
+export async function getCurrentWorkspace() {
+
+    const database = await getDb();
+
+    const rows = await database.select(`
+    SELECT *
+    FROM workspaces
+    ORDER BY last_used DESC
+    LIMIT 1
+  `);
+    console.log('current workspace rows', rows)
+    if (!rows.length || rows[0].last_used === 0) {
+        console.log('no WS founded fallback to default', GLOBAL_WORKSPACE)
+        return GLOBAL_WORKSPACE;
+    }
+    console.log('WS founded :', rows[0])
+    return rows[0];
+}
+
+// export async function setCurrentWorkspace(id: number) {
+//     const database = await getDb();
+//
+//     await database.execute(
+//         `
+//         UPDATE workspaces
+//         SET last_used = strftime('%s','now')
+//         WHERE id = ?
+//         `,
+//         [id]
+//     );
+// }
+export async function setCurrentWorkspace(id:number|null) {
+    console.log('setCurrentWorkspace');
+    console.log(id);
+    const database = await getDb();
+
+    if (id === null) {
+        console.log('is null : reset last_used');
+        await database.execute(`
+      UPDATE workspaces
+      SET last_used = 0
+    `);
+        return;
+    }
+    console.log('set last_used to ', id);
+    await database.execute(
+        `
+    UPDATE workspaces
+    SET last_used = strftime('%s','now')
+    WHERE id = ?
+    `,
+        [id]
+    );
+}
 /////////////////////////////
 // TEMPLATES
 /////////////////////////////
@@ -159,19 +232,25 @@ export async function getTemplates(workspaceId = null) {
 export async function addTemplate(
     name: string,
     description: string,
-    body: string,
+    content: string,
     icon: string,
-    workspaceId = 0
+    params: {type:string,description:string,placeHolder:string,name:string }[]=[],
+    workspaceId = null
 ) {
     const database = await getDb();
 
-    await database.execute(
+    const template =  await database.execute(
         `
-        INSERT INTO templates (name, description, body, icon, workspace_id)
+        INSERT INTO templates (name, description, content, icon, workspace_id)
         VALUES (?, ?, ?, ?, ?)
         `,
-        [name, description, body, icon, workspaceId]
+        [name, description, content, icon, workspaceId]
     );
+    console.log('template', template);
+    for (const param of params) {
+        console.log('param', param);
+        await addTemplateParam(template.lastInsertId, param.type, param.placeHolder, param.description, param.name)
+    }
 }
 
 export async function updateTemplate(template: {
@@ -229,19 +308,20 @@ export async function getTemplateParams(templateId: number) {
 
 export async function addTemplateParam(
     templateId: number,
-    type: string,
-    placeholder: string,
-    description: string
+    type: string, // input type
+    placeholder: string, // the variable
+    description: string,  // description
+    name: string  // name
 ) {
     const database = await getDb();
 
     await database.execute(
         `
         INSERT INTO template_params
-        (template_id, type, placeholder, description)
-        VALUES (?, ?, ?, ?)
+        (template_id, type, placeholder, description, name)
+        VALUES (?, ?, ?, ?, ?)
         `,
-        [templateId, type, placeholder, description]
+        [templateId, type, placeholder, description, name]
     );
 }
 

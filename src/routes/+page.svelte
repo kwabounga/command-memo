@@ -3,7 +3,10 @@
 
     console.log("PAGE SCRIPT LOADED");
     import {onMount} from "svelte";
-    import {addCommand, deleteCommand, getCommands, updateCommand, updateCategorie} from "$lib/db";
+    import {
+        addCommand, deleteCommand, getCommands, updateCommand, updateCategorie, setCurrentWorkspace,
+        getCurrentWorkspace, getTemplates, addTemplate
+    } from "$lib/db";
     import {writeText} from "@tauri-apps/plugin-clipboard-manager";
     import {getCurrentWindow} from "@tauri-apps/api/window";
     import { enable, disable, isEnabled,  } from "@tauri-apps/plugin-autostart";
@@ -23,13 +26,15 @@
         Row,
         Col,
         Tooltip,
-        Icon
+        Icon,
+        TabContent,
+        TabPane
     } from '@sveltestrap/sveltestrap';
 
     import {icons} from "$lib/icons";
     import {resolveIconUrl} from "$lib/iconResolver";
     import {invoke} from "@tauri-apps/api/core";
-
+    import { currentWorkspace, initWorkspace } from '$lib/stores/workspace'
     let appWindow;
     let searchInput: HTMLInputElement | null = null;
     // let nameInput: HTMLInputElement | null = null;
@@ -39,6 +44,7 @@
     // let description = "";
     // let command = "";
     let commands: any[] = [];
+    let templates: any[] = [];
     let grouped: any[] = [];
     let showAdd = false;
 
@@ -57,7 +63,8 @@
     let userIcons: Set<string> = new Set();
     let allIcons = [...icons, ...userIcons];
 
-    let currentWorkspace = null;
+    let workspace = $currentWorkspace;
+
     let icon: string = 'bash';
 
     let formData = {
@@ -66,11 +73,19 @@
         command: "",
         icon
     };
-
+    let formDataTemplate = {
+        name: "",
+        description: "",
+        content: "",
+        params: [],
+        icon
+    };
     import { initIconDir } from "$lib/iconResolver";
     import CommandForm from "$lib/components/CommandForm.svelte";
     import BaseModal from "$lib/components/BaseModal.svelte";
     import CategoryHeader from "$lib/components/CategoryHeader.svelte";
+    import WorkspaceDropdown from "$lib/components/WorkspaceDropdown.svelte";
+    import TemplateForm from "$lib/components/TemplateForm.svelte";
     /* helper explanation */
     const helpCommands: any = [
         {
@@ -90,7 +105,17 @@
             keys: ["Alt + mouse-scroll"]
         },
     ]
+    async function updateWorkspace(ws) {
+        console.log('updateWorkspace', ws);
+        await setCurrentWorkspace(ws?.id??null);
 
+        const cws = await getCurrentWorkspace();
+        currentWorkspace.set(cws);
+        console.log(currentWorkspace,currentWorkspace.id);
+        workspace = $currentWorkspace
+        console.log(workspace,workspace.id);
+        await refresh();
+    }
     /**
      * focus input element
      * @param _input
@@ -109,18 +134,40 @@
      * reload data from database
      */
     async function refresh() {
-        commands = await getCommands(search, currentWorkspace);
-
-        grouped = commands.reduce((acc, cmd) => {
+        // commands = await getCommands(search, currentWorkspace);
+        commands = await getCommands(search, workspace?.id ?? null);
+        templates = await getTemplates(search, workspace?.id ?? null);
+        commands = commands.map((c)=>{
+            c.type = "command"
+            return c
+        })
+        templates = templates.map((c)=>{
+            c.type = "template"
+            return c
+        })
+        grouped = [...commands,...templates].reduce((acc, cmd) => {
             const key = cmd.icon || "default";
             acc[key] ||= [];
             acc[key].push(cmd);
             return acc;
         }, {});
 
-        if( commands.length === 0 ) {
+        if( grouped.length === 0 ) {
             showHelpModal = true;
         }
+    }
+
+    /**
+     * add template to database
+     */
+    async function addT() {
+        if (!formDataTemplate.name || !formDataTemplate.content) return;
+        console.log(formDataTemplate.name, formDataTemplate.description, formDataTemplate.content, formDataTemplate.icon, formDataTemplate.params , workspace?.id ?? null);
+        await addTemplate(formDataTemplate.name, formDataTemplate.description, formDataTemplate.content, formDataTemplate.icon, formDataTemplate.params , workspace?.id ?? null);
+
+        // name = description = command = "";
+        toggleAdd();
+        await refresh();
     }
 
     /**
@@ -128,7 +175,7 @@
      */
     async function add() {
         if (!formData.name || !formData.command) return;
-        await addCommand(formData.name, formData.description, formData.command, formData.icon);
+        await addCommand(formData.name, formData.description, formData.command, formData.icon, workspace?.id ?? null);
         // name = description = command = "";
         toggleAdd();
         await refresh();
@@ -224,7 +271,7 @@
      * open delete modale
      * @param command
      */
-    function openModifyModal(command: { id: number; name: string; command: string; description: string; icon: string }) {
+    function openModifyModal(command: { id: number; name: string; command: string; description: string; icon: string, type:string }) {
         commandToModify = command;
         showModifyModal = true;
     }
@@ -387,7 +434,10 @@
         console.log("✅ Database cleared");
     }
 */
-
+    // async function loadCommands() {
+    //     const ws = get(currentWorkspace);
+    //     commands = await getCommands("", ws?.id ?? null);
+    // }
     /**
      * entry point
      */
@@ -399,6 +449,13 @@
 
         allIcons = [ ...userIcons, ...icons];
         icon= allIcons[0] || 'bash';
+
+        // workspace
+        await initWorkspace();
+        // window.addEventListener("workspaceChanged", async () => {
+        //     await refresh();
+        // });
+        // !workspace
 
          // get user icons Dir path
         await initIconDir();
@@ -425,8 +482,7 @@
 <!-- container -->
 <Container fluid="true" class="main-wrapper">
     {#if showAdd}
-        <Row noGutters="true" class="add-part mb-2">
-
+        <Row class="add-part mb-4 gx-2">
 <!--                 Seed Db (dev Only)-->
 <!--            <Button color="warning" bsSize="sm" on:click={seedDatabase}>-->
 <!--                🌱 Seed DB (DEV)-->
@@ -435,27 +491,47 @@
 <!--            <Button color="danger" bsSize="sm" on:click={deleteAll}>-->
 <!--                🧨 Delete ALL (DEV)-->
 <!--            </Button>-->
-            <InputGroup bsSize="sm" class="mb-2">
-                <Input type="checkbox"
-                       bind:checked={autoStartEnabled}
-                       on:change={() => toggleAutoStart(autoStartEnabled)}
-                />
-                <span class="text-light">Lancer au démarrage</span>
-            </InputGroup>
             <Col xs="12" md="6" lg="9">
-                <Card class="p-3" theme="light">
-                    <CommandForm
-                            bind:data={formData}
-                            {allIcons}
-                            {userIcons}
-                            submitLabel="Ajouter"
-                            onSubmit={add}
-                    />
-                </Card>
+                <TabContent theme="dark" >
+                    <TabPane tabId="commands" tab="➕ Commande" active>
+                        <Card class="p-3" theme="light">
+                            <CommandForm
+                                    bind:data={formData}
+                                    {allIcons}
+                                    {userIcons}
+                                    submitLabel="Ajouter"
+                                    onSubmit={add}
+                            />
+                        </Card>
+                    </TabPane>
+                    <TabPane tabId="templates" tab="➕ Template">
+                        <Card class="p-3" theme="light">
+                            <TemplateForm
+                                    bind:data={formDataTemplate}
+                                    {allIcons}
+                                    {userIcons}
+                                    submitLabel="Ajouter"
+                                    onSubmit={addT}
+                            />
+                        </Card>
+                    </TabPane>
+                </TabContent>
+
             </Col>
             <Col xs="12" md="6" lg="3">
-                <Card class="p-3" theme="light">
-                    Add Workspace here
+                <InputGroup bsSize="sm" class="mb-2">
+                    <Input type="checkbox"
+                           bind:checked={autoStartEnabled}
+                           on:change={() => toggleAutoStart(autoStartEnabled)}
+                    />
+                    <span class="text-light">Lancer au démarrage</span>
+                </InputGroup>
+                <Card class="p-3 mt-3" theme="light">
+                    <WorkspaceDropdown
+                            selectedWorkspace={workspace}
+                            onChange={updateWorkspace}
+                            canCreate={true}
+                    />
                 </Card>
             </Col>
         </Row>
@@ -518,7 +594,7 @@
                                         bsSize="sm"
                                         on:click={() => copy(c.command)}
                                         id="btn-cmd-{c.id}">
-                                    <strong>{c.name}</strong>
+                                    <strong>{c.type === 'command' ? '>':'$'} {c.name}</strong>
                                 </Button>
                                 <Button color="danger" bsSize="sm" on:click={() => openDeleteModal(c)} id="btn-cmd-delete-{c.id}">
                                     ✕

@@ -1,12 +1,19 @@
 <script lang="ts">
     import IconSelect from "./IconSelect.svelte";
-    import {Button, Input, Tooltip} from "@sveltestrap/sveltestrap";
+    import {Button, Input, InputGroup, Tooltip} from "@sveltestrap/sveltestrap";
+
+    import { onMount } from "svelte";
+
+    import WorkspaceDropdown from "./WorkspaceDropdown.svelte";
+    import { getWorkspaces } from "../db";
+    import {  GLOBAL_WORKSPACE } from "../stores/workspace";
 
     export let data = {
         name: "",
         description: "",
         command: "",
-        icon: ""
+        icon: "",
+        workspace_id: null
     };
 
     export let allIcons: string[] = [];
@@ -14,6 +21,27 @@
 
     export let onSubmit: () => void;
     export let submitLabel = "Ajouter";
+
+    let workspace = null;
+    let workspaces = [];
+
+
+    onMount(async () => {
+
+        const dbWorkspaces = await getWorkspaces();
+
+        workspaces = [GLOBAL_WORKSPACE, ...dbWorkspaces];
+
+        workspace = workspaces.find(
+            w => w.id === data.workspace_id
+        ) ?? GLOBAL_WORKSPACE;
+    });
+    function workspaceChanged(ws) {
+
+        workspace = ws;
+
+        data.workspace_id = ws?.id ?? null;
+    }
 </script>
 <style>
     .command-form{
@@ -38,6 +66,14 @@
             icons={allIcons}
             {userIcons}
     />
+    <InputGroup>
+        <span class="input-group-text"
+        >Environnement</span>
+        <WorkspaceDropdown
+                selectedWorkspace={workspace}
+                onChange={workspaceChanged}
+        />
+    </InputGroup>
     <Tooltip
             animation
             content="icon utilisé pour grouper les commandes entre elles"
