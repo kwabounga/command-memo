@@ -82,7 +82,7 @@
 
 <ButtonDropdown isOpen={dropdownOpen} toggle={toggle}>
 
-    <DropdownToggle caret size="sm" color="secondary">
+    <DropdownToggle caret size="sm" color="info">
         Params ({params.length})
     </DropdownToggle>
 

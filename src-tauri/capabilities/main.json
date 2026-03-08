@@ -26,6 +26,12 @@
 
     "autostart:allow-enable",
     "autostart:allow-disable",
-    "autostart:allow-is-enabled"
+    "autostart:allow-is-enabled",
+
+    "fs:allow-app-write",
+
+    "dialog:allow-save",
+    "dialog:default"
+
   ]
 }

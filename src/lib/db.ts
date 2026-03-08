@@ -1,5 +1,6 @@
 import { GLOBAL_WORKSPACE } from "$lib/stores/workspace";
-
+// import type { Template, TemplateParams } from "../routes/+page.svelte";
+import type {Command, Template, TemplateParams, CmdItem, Workspace} from "$lib/types";
 let db: any = null;
 
 
@@ -19,7 +20,7 @@ async function getDb() {
 // COMMANDS
 /////////////////////////////
 
-export async function getCommands(search = "", workspaceId = null) {
+export async function getCommands(search = "", workspaceId:number|null = null) {
     console.log('get commands')
     console.log(workspaceId);
     const database = await getDb();
@@ -40,7 +41,7 @@ export async function addCommand(
     description: string,
     command: string,
     icon: string,
-    workspaceId = null
+    workspaceId:number|null|undefined = null
 ) {
     const database = await getDb();
 
@@ -216,70 +217,255 @@ export async function setCurrentWorkspace(id:number|null) {
 // TEMPLATES
 /////////////////////////////
 
-export async function getTemplates(workspaceId = null) {
+// export async function getTemplates(workspaceId = null) {
+//     const database = await getDb();
+//
+//     return database.select(
+//         `
+//         SELECT * FROM templates
+//         WHERE workspace_id = ? OR workspace_id IS NULL
+//         ORDER BY name
+//         `,
+//         [workspaceId]
+//     );
+// }
+export async function getTemplates(search = "", workspaceId:number|null = null) {
+
     const database = await getDb();
 
-    return database.select(
+    const rows = await database.select(
         `
-        SELECT * FROM templates
-        WHERE workspace_id = ? OR workspace_id IS NULL
-        ORDER BY name
+        SELECT
+            t.*,
+            p.id as param_id,
+            p.type as param_type,
+            p.placeholder,
+            p.description as param_description,
+            p.name as param_name
+        FROM templates t
+        LEFT JOIN template_params p
+        ON p.template_id = t.id
+        WHERE (t.workspace_id = ? OR t.workspace_id IS NULL)
+        AND (t.name LIKE ? OR t.description LIKE ? OR t.icon LIKE ?)
+        ORDER BY t.name, p.id
         `,
-        [workspaceId]
+        [workspaceId, `%${search}%`, `%${search}%`, `%${search}%`]
     );
-}
 
-export async function addTemplate(
-    name: string,
-    description: string,
-    content: string,
-    icon: string,
-    params: {type:string,description:string,placeHolder:string,name:string }[]=[],
-    workspaceId = null
-) {
-    const database = await getDb();
+    const templatesMap = new Map();
 
-    const template =  await database.execute(
-        `
-        INSERT INTO templates (name, description, content, icon, workspace_id)
-        VALUES (?, ?, ?, ?, ?)
-        `,
-        [name, description, content, icon, workspaceId]
-    );
-    console.log('template', template);
-    for (const param of params) {
-        console.log('param', param);
-        await addTemplateParam(template.lastInsertId, param.type, param.placeHolder, param.description, param.name)
+    for (const row of rows) {
+
+        if (!templatesMap.has(row.id)) {
+
+            templatesMap.set(row.id, {
+                id: row.id,
+                name: row.name,
+                description: row.description,
+                content: row.content,
+                icon: row.icon,
+                workspace_id: row.workspace_id,
+                type: row.type,
+                params: []
+            });
+
+        }
+
+        if (row.param_id) {
+
+            templatesMap.get(row.id).params.push({
+                id: row.param_id,
+                type: row.param_type,
+                placeholder: row.placeholder,
+                description: row.param_description,
+                name: row.param_name
+            });
+
+        }
+
     }
-}
 
-export async function updateTemplate(template: {
-    id: number;
-    name: string;
-    description: string;
-    body: string;
-    icon: string;
-    workspace_id: number;
-}) {
+    return [...templatesMap.values()];
+}
+// export async function addTemplate(
+//     name: string,
+//     description: string,
+//     content: string,
+//     icon: string,
+//     params: {type:string,description:string,placeHolder:string,name:string }[]=[],
+//     workspaceId = null
+// ) {
+//     const database = await getDb();
+//
+//     const template =  await database.execute(
+//         `
+//         INSERT INTO templates (name, description, content, icon, workspace_id)
+//         VALUES (?, ?, ?, ?, ?)
+//         `,
+//         [name, description, content, icon, workspaceId]
+//     );
+//     console.log('template', template);
+//     for (const param of params) {
+//         console.log('param', param);
+//         await addTemplateParam(template.lastInsertId, param.type, param.placeHolder, param.description, param.name)
+//     }
+// }
+export async function addTemplate(
+    name:string,
+    description:string,
+    content:string,
+    icon:string,
+    params:TemplateParams[] = [],
+    workspaceId:number|null = null,
+    type:string = "sql"
+) {
+
+    const database = await getDb();
+
+    const result = await database.execute(
+        `
+        INSERT INTO templates (name, description, content, icon, workspace_id, type)
+        VALUES (?, ?, ?, ?, ?, ?)
+        `,
+        [name, description, content, icon, workspaceId, type]
+    );
+
+    const templateId = result.lastInsertId;
+
+    for (const param of params) {
+
+        await database.execute(
+            `
+            INSERT INTO template_params
+            (template_id, type, placeholder, description, name)
+            VALUES (?, ?, ?, ?, ?)
+            `,
+            [
+                templateId,
+                param.type,
+                param.placeholder,
+                param.description,
+                param.name
+            ]
+        );
+
+    }
+
+    return templateId;
+}
+// export async function updateTemplate(template: {
+//     id: number;
+//     name: string;
+//     description: string;
+//     body: string;
+//     icon: string;
+//     workspace_id: number;
+// }) {
+//     const database = await getDb();
+//
+//     await database.execute(
+//         `
+//         UPDATE templates
+//         SET name = ?, description = ?, body = ?, icon = ?, workspace_id = ?
+//         WHERE id = ?
+//         `,
+//         [
+//             template.name,
+//             template.description,
+//             template.body,
+//             template.icon,
+//             template.workspace_id,
+//             template.id
+//         ]
+//     );
+// }
+export async function updateTemplate(template:Template) {
+
     const database = await getDb();
 
     await database.execute(
         `
         UPDATE templates
-        SET name = ?, description = ?, body = ?, icon = ?, workspace_id = ?
+        SET name = ?, description = ?, content = ?, icon = ?, workspace_id = ?
         WHERE id = ?
         `,
         [
             template.name,
             template.description,
-            template.body,
+            template.content,
             template.icon,
             template.workspace_id,
             template.id
         ]
     );
-}
 
+    const existingParams = await database.select(
+        `SELECT id FROM template_params WHERE template_id = ?`,
+        [template.id]
+    );
+
+    const existingIds = existingParams.map((p:TemplateParams) => p.id);
+
+    const incomingIds = template.params
+        .filter((p:TemplateParams) => p.id)
+        .map((p:TemplateParams) => p.id);
+
+    // DELETE removed params
+    for (const id of existingIds) {
+
+        if (!incomingIds.includes(id)) {
+
+            await database.execute(
+                `DELETE FROM template_params WHERE id = ?`,
+                [id]
+            );
+
+        }
+
+    }
+
+    // UPSERT params
+    for (const param of template.params) {
+
+        if (param.id) {
+
+            await database.execute(
+                `
+                UPDATE template_params
+                SET type=?, placeholder=?, description=?, name=?
+                WHERE id=?
+                `,
+                [
+                    param.type,
+                    param.placeholder,
+                    param.description,
+                    param.name,
+                    param.id
+                ]
+            );
+
+        } else {
+
+            await database.execute(
+                `
+                INSERT INTO template_params
+                (template_id, type, placeholder, description, name)
+                VALUES (?, ?, ?, ?, ?)
+                `,
+                [
+                    template.id,
+                    param.type,
+                    param.placeholder,
+                    param.description,
+                    param.name
+                ]
+            );
+
+        }
+
+    }
+
+}
 export async function deleteTemplate(id: number) {
     const database = await getDb();
 
@@ -358,4 +544,36 @@ export async function updateTemplateParam(param: {
             param.id
         ]
     );
+}
+
+export async function exportAllData() {
+
+    const database = await getDb();
+
+    const commands = await database.select(`
+        SELECT * FROM commands
+    `);
+
+    const templates = await database.select(`
+        SELECT * FROM templates
+    `);
+
+    const templateParams = await database.select(`
+        SELECT * FROM template_params
+    `);
+
+    const workspaces = await database.select(`
+        SELECT * FROM workspaces
+    `);
+
+    return {
+        version: 1,
+        exported_at: new Date().toISOString(),
+        data: {
+            commands,
+            templates,
+            template_params: templateParams,
+            workspaces
+        }
+    };
 }

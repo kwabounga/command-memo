@@ -1,12 +1,15 @@
 <script lang="ts">
     import IconSelect from "$lib/components/IconSelect.svelte";
+    import hljs from 'highlight.js';
 
     console.log("PAGE SCRIPT LOADED");
     import {onMount} from "svelte";
     import {
         addCommand, deleteCommand, getCommands, updateCommand, updateCategorie, setCurrentWorkspace,
-        getCurrentWorkspace, getTemplates, addTemplate
+        getCurrentWorkspace, getTemplates, addTemplate, updateTemplate, exportAllData
     } from "$lib/db";
+    import { save } from "@tauri-apps/plugin-dialog";
+    import { writeTextFile } from "@tauri-apps/plugin-fs";
     import {writeText} from "@tauri-apps/plugin-clipboard-manager";
     import {getCurrentWindow} from "@tauri-apps/api/window";
     import { enable, disable, isEnabled,  } from "@tauri-apps/plugin-autostart";
@@ -28,21 +31,17 @@
         Tooltip,
         Icon,
         TabContent,
-        TabPane
+        TabPane, CardHeader, CardBody, Badge
     } from '@sveltestrap/sveltestrap';
 
     import {icons} from "$lib/icons";
-    import {resolveIconUrl} from "$lib/iconResolver";
     import {invoke} from "@tauri-apps/api/core";
-    import { currentWorkspace, initWorkspace } from '$lib/stores/workspace'
-    let appWindow;
+    import { currentWorkspace, initWorkspace } from '$lib/stores/workspace';
+
+    let appWindow:any;
     let searchInput: HTMLInputElement | null = null;
-    // let nameInput: HTMLInputElement | null = null;
 
     let search = "";
-    // let name = "";
-    // let description = "";
-    // let command = "";
     let commands: any[] = [];
     let templates: any[] = [];
     let grouped: any[] = [];
@@ -55,30 +54,34 @@
     let showDeleteModal = false;
     let commandToDelete: { id: number; name: string } | null = null;
 
-    // modify modal
-    let showModifyModal = false;
-    let commandToModify: { id: number; name: string; command: string; description: string; icon: string } | null = null;
+    let itemToEdit:CmdItem|null = null;
+    let showEditModal = false;
 
     let autoStartEnabled: boolean = false;
     let userIcons: Set<string> = new Set();
     let allIcons = [...icons, ...userIcons];
 
-    let workspace = $currentWorkspace;
+    let workspace:Workspace|null|undefined = $currentWorkspace;
 
     let icon: string = 'bash';
 
-    let formData = {
+    let addType = null;
+    let formData:Command = {
         name: "",
         description: "",
         command: "",
-        icon
+        icon,
+        workspace_id:null
+
     };
-    let formDataTemplate = {
+    let formDataTemplate:Template = {
         name: "",
         description: "",
         content: "",
         params: [],
-        icon
+        icon,
+        type:"sql",
+        workspace_id:null
     };
     import { initIconDir } from "$lib/iconResolver";
     import CommandForm from "$lib/components/CommandForm.svelte";
@@ -86,6 +89,8 @@
     import CategoryHeader from "$lib/components/CategoryHeader.svelte";
     import WorkspaceDropdown from "$lib/components/WorkspaceDropdown.svelte";
     import TemplateForm from "$lib/components/TemplateForm.svelte";
+    import type {Command, Template, TemplateParams, CmdItem, Workspace} from "$lib/types";
+
     /* helper explanation */
     const helpCommands: any = [
         {
@@ -105,15 +110,11 @@
             keys: ["Alt + mouse-scroll"]
         },
     ]
-    async function updateWorkspace(ws) {
+    async function updateWorkspace(ws:Workspace) {
         console.log('updateWorkspace', ws);
         await setCurrentWorkspace(ws?.id??null);
 
-        const cws = await getCurrentWorkspace();
-        currentWorkspace.set(cws);
-        console.log(currentWorkspace,currentWorkspace.id);
-        workspace = $currentWorkspace
-        console.log(workspace,workspace.id);
+
         await refresh();
     }
     /**
@@ -134,6 +135,12 @@
      * reload data from database
      */
     async function refresh() {
+
+        const cws = await getCurrentWorkspace();
+        currentWorkspace.set(cws);
+        workspace = $currentWorkspace
+        console.log(workspace,workspace?.id);
+
         // commands = await getCommands(search, currentWorkspace);
         commands = await getCommands(search, workspace?.id ?? null);
         templates = await getTemplates(search, workspace?.id ?? null);
@@ -141,20 +148,21 @@
             c.type = "command"
             return c
         })
-        templates = templates.map((c)=>{
-            c.type = "template"
-            return c
-        })
-        grouped = [...commands,...templates].reduce((acc, cmd) => {
+        // templates = templates.map((c)=>{
+        //     c.type = "template"
+        //     return c
+        // })
+        grouped = [...commands, ...templates].reduce((acc, cmd:CmdItem) => {
             const key = cmd.icon || "default";
             acc[key] ||= [];
             acc[key].push(cmd);
             return acc;
         }, {});
-
+        console.log(grouped);
         if( grouped.length === 0 ) {
             showHelpModal = true;
         }
+        focusInput(searchInput);
     }
 
     /**
@@ -165,7 +173,6 @@
         console.log(formDataTemplate.name, formDataTemplate.description, formDataTemplate.content, formDataTemplate.icon, formDataTemplate.params , workspace?.id ?? null);
         await addTemplate(formDataTemplate.name, formDataTemplate.description, formDataTemplate.content, formDataTemplate.icon, formDataTemplate.params , workspace?.id ?? null);
 
-        // name = description = command = "";
         toggleAdd();
         await refresh();
     }
@@ -189,6 +196,26 @@
         await writeText(cmd);
         await appWindow?.hide();
     }
+    /*
+    {
+    "id": 10,
+    "name": "SQL",
+    "description": "une requete sql de test",
+    "content": "SELECT\n            t.*,\n            p.id as param_id,\n            p.type,\n            p.placeholder,\n            p.description as param_description,\n            p.name as param_name\n        FROM templates t\n        LEFT JOIN template_params p\n        ON p.template_id = t.id\n        WHERE (t.workspace_id = ? OR t.workspace_id IS NULL)\n        AND (t.name LIKE \"%{{search}}%\" OR t.description LIKE \"%{{search}}%\" OR t.icon LIKE \"%{{search}}%\")\n        ORDER BY t.name, p.id",
+    "icon": "sql.svg",
+    "workspace_id": 1,
+    "params": [
+        {
+            "id": 2,
+            "type": "text",
+            "placeholder": "search",
+            "description": "terme de recherche pour effectuer la requete",
+            "name": "Terme de recherche"
+        }
+    ],
+    "type": "template"
+}
+     */
 
     /**
      * verify if no modifier are pressed
@@ -247,15 +274,25 @@
      */
     function toggleAdd() {
         showAdd = !showAdd;
+
+        // reset new command /template object
         if (showAdd) {
             formData = {
                 name: "",
                 description: "",
                 command: "",
-                icon
+                icon,
+                workspace_id: null
             };
 
-            // focusInput(nameInput);
+            formDataTemplate = {
+                name: "",
+                description: "",
+                content: "",
+                params: [],
+                icon,
+                workspace_id: null
+            }
         }
     }
 
@@ -267,15 +304,15 @@
         commandToDelete = command;
         showDeleteModal = true;
     }
-    /**
-     * open delete modale
-     * @param command
-     */
-    function openModifyModal(command: { id: number; name: string; command: string; description: string; icon: string, type:string }) {
-        commandToModify = command;
-        showModifyModal = true;
-    }
 
+    function openEditModal(item:CmdItem) {
+        itemToEdit = structuredClone(item); // éviter mutation directe
+        showEditModal = true;
+    }
+    function closeEditModal() {
+        showEditModal = false;
+        itemToEdit = null;
+    }
     /**
      * close delete modale
      */
@@ -286,15 +323,16 @@
 
     /**
      * close delete modale
-     */
+
     function closeModifyModal () {
         showModifyModal = false;
         commandToModify = null;
     }
+    */
 
     /**
      * confirm delete action and close Modal
-     */
+
     async function updateCommandHandler() {
         if (!commandToModify) return;
 
@@ -302,6 +340,21 @@
         await refresh();
 
         closeModifyModal();
+    }*/
+
+    async function updateItemHandler() {
+
+        if (!itemToEdit) return;
+
+        if (itemToEdit.type === "command") {
+            await updateCommand(itemToEdit);
+        } else {
+            await updateTemplate(itemToEdit);
+        }
+
+        await refresh();
+
+        closeEditModal();
     }
     /**
      * toogle autostart
@@ -313,6 +366,7 @@
             await disable();
         }
     }
+
     /**
      * confirm delete action and close Modal
      */
@@ -324,9 +378,12 @@
 
         closeDeleteModal();
     }
+
+
     let categoryToModifyOld:string = "";
     let categoryToModifyNew:string = "";
     let modifyCategoryModalOpen:boolean = false;
+
     function closeModifyCategoryModal(){
         categoryToModifyOld = "";
         categoryToModifyNew = ""
@@ -342,106 +399,65 @@
         await refresh();
         closeModifyCategoryModal()
     }
-    /*    seed ( dev only )
-    async function seedDatabase() {
-        const icons = [
-            'nim',
-            'nix',
-            'nodejs',
-            'nodejs_1',
-            'nodejs_alt',
-            'nodemon',
-            'npm',
-            'npm_alt',
-            'nrwl',
-            'nuget',
-            'nunjucks',
-            'nuxt',
-            'ocaml',
-            'opa',
-            'opam',
-            'pascal',
-            'pawn',
-            'pdf',
-            'percy',
-            'perl',
-            'php',
-            'php_elephant',
-            'pipeline',
-            'postcss',
-            'posthtml',
-            'powerpoint',
-            'powershell',
-            'prettier',
-            'prisma',
-            'processing',
-            'processing_light',
-            'prolog',
-            'protractor',
-            'pug',
-            'puppet',
-            'purescript',
-            'python',
-            'qsharp',
-            'quasar',
-            'r',
-            'racket',
-            'raml',
-            'razor',
-            'react',
-            'react_ts',
-            'readme',
-            'reason',
-            'red',
-            'replit',
-            'rescript',
-            'restql',
-            'riot',
-        ];
 
-        console.log("🌱 Seeding database…");
+    let templateToCopy:any = null;
+    let templateContentPreview:string = "";
+    let showCopyTemplateModal = false;
 
-        for (const icon of icons) {
-            const count = Math.floor(Math.random() * 50) + 1;
+    let paramValues:any = {};
+    async function openCopyTemplateModal(tpl: Template) {
+        console.log(tpl)
+        templateToCopy = tpl;
+        paramValues = {};
 
-            for (let i = 1; i <= count; i++) {
-                await addCommand(
-                    `${icon} command ${i}`,
-                    `Description ${i} pour ${icon}`,
-                    `${icon} --do-something-${i}`,
-                    icon // 👈 colonne icon
-                );
-            }
+        for (const p of tpl.params) {
+            paramValues[p.placeholder] = "";
         }
 
-        await refresh();
-        console.log("✅ Seed terminé");
+        updateCopyTemplatePreview();
+
+        showCopyTemplateModal = true;
     }
-*/
+    function highLightTemplate(tpl:Template, code:string){
+        // console.log('tpl?.type',tpl,tpl?.type)
+        let language:string = (tpl?.type && tpl?.type !== '' )? tpl?.type : 'sql';
+        return hljs.highlight(code, {language}).value;
+    }
+    function updateCopyTemplatePreview(){
+        let code = resolveTemplate(templateToCopy?.content,
+            paramValues);
+        templateContentPreview =  highLightTemplate(templateToCopy,code);
+    }
+    function resolveTemplate(content:string, values:any) {
 
-    /*  delete all ( dev only )
-    async function deleteAll() {
-        if (!confirm("⚠️ Supprimer TOUTES les commandes ?")) return;
+        let result = content;
 
-        console.log("🧨 Deleting all commands…");
+        for (const key in values) {
+            const regex = new RegExp(`{{${key}}}`, "g");
+            const value = (!values[key] || values[key] === "") ?  `{{${key}}}` : values[key];
+            result = result.replace(regex, value);
 
-        const all = await getCommands("");
-        for (const c of all) {
-            await deleteCommand(c.id);
         }
 
-        await refresh();
-        console.log("✅ Database cleared");
+        return result;
     }
-*/
-    // async function loadCommands() {
-    //     const ws = get(currentWorkspace);
-    //     commands = await getCommands("", ws?.id ?? null);
-    // }
+    async function confirmTemplateCopy() {
+
+        if (!templateToCopy) return;
+
+        const finalText = resolveTemplate(
+            templateToCopy.content,
+            paramValues
+        );
+
+        await navigator.clipboard.writeText(finalText);
+
+        showCopyTemplateModal = false;
+    }
     /**
      * entry point
      */
-    onMount(async () => {
+    onMount( async () => {
         console.log("🟢 Svelte mounted");
         appWindow = getCurrentWindow();
         const list_icons = await invoke<string[]>("list_user_icons");
@@ -452,22 +468,23 @@
 
         // workspace
         await initWorkspace();
-        // window.addEventListener("workspaceChanged", async () => {
-        //     await refresh();
-        // });
         // !workspace
 
          // get user icons Dir path
         await initIconDir();
         await refresh();
+
         // keyboard event handler
         window.addEventListener("keydown", handleKeydown);
-        // focus initial
-        focusInput(searchInput);
+
+        // // focus initial
+        // focusInput(searchInput);
+
         // 🔥 focus à chaque affichage de la fenêtre
         const unlisten = await appWindow?.listen("tauri://focus", () => {
             focusInput(searchInput);
         });
+
         // autostart ?
         autoStartEnabled = await isEnabled();
 
@@ -476,6 +493,53 @@
             unlisten();
         };
     });
+    async function exportDatabase() {
+
+        const data = await exportAllData();
+
+        const path = await save({
+            filters: [{
+                name: "JSON",
+                extensions: ["json"]
+            }],
+            defaultPath: "commands-backup.json"
+        });
+
+        if (!path) return;
+
+        await writeTextFile(
+            path,
+            JSON.stringify(data, null, 2)
+        );
+
+        console.log("Export saved to", path);
+    }
+    // async function exportDatabase() {
+    //
+    //     const data = await exportAllData();
+    //
+    //     const json = JSON.stringify(data, null, 2);
+    //     console.log(json);
+    //     const blob = new Blob([json], {
+    //         type: "application/json"
+    //     });
+    //     console.log('ICI');
+    //
+    //     const url = URL.createObjectURL(blob);
+    //     console.log('LA');
+    //
+    //     const a = document.createElement("a");
+    //
+    //     a.href = url;
+    //     a.download = `commands-backup-${Date.now()}.json`;
+    //
+    //     a.click();
+    //     console.log('click');
+    //
+    //     URL.revokeObjectURL(url);
+    //     console.log('END');
+    //
+    // }
 </script>
 
 
@@ -483,18 +547,10 @@
 <Container fluid="true" class="main-wrapper">
     {#if showAdd}
         <Row class="add-part mb-4 gx-2">
-<!--                 Seed Db (dev Only)-->
-<!--            <Button color="warning" bsSize="sm" on:click={seedDatabase}>-->
-<!--                🌱 Seed DB (DEV)-->
-<!--            </Button>-->
-<!--                 Delete All (dev Only)-->
-<!--            <Button color="danger" bsSize="sm" on:click={deleteAll}>-->
-<!--                🧨 Delete ALL (DEV)-->
-<!--            </Button>-->
             <Col xs="12" md="6" lg="9">
-                <TabContent theme="dark" >
+                <TabContent data-bs-theme="light" class="add-tabs">
                     <TabPane tabId="commands" tab="➕ Commande" active>
-                        <Card class="p-3" theme="light">
+                        <Card class="p-3 add-card" theme="light">
                             <CommandForm
                                     bind:data={formData}
                                     {allIcons}
@@ -505,7 +561,7 @@
                         </Card>
                     </TabPane>
                     <TabPane tabId="templates" tab="➕ Template">
-                        <Card class="p-3" theme="light">
+                        <Card class="p-3 add-card" theme="light">
                             <TemplateForm
                                     bind:data={formDataTemplate}
                                     {allIcons}
@@ -526,13 +582,22 @@
                     />
                     <span class="text-light">Lancer au démarrage</span>
                 </InputGroup>
-                <Card class="p-3 mt-3" theme="light">
-                    <WorkspaceDropdown
-                            selectedWorkspace={workspace}
-                            onChange={updateWorkspace}
-                            canCreate={true}
-                    />
+                <Card class="p-3 mt-3 workspace-card" theme="light">
+                    <CardHeader>
+                        Environnement
+                    </CardHeader>
+                    <CardBody>
+                        <WorkspaceDropdown
+                                selectedWorkspace={workspace}
+                                onChange={updateWorkspace}
+                                canCreate={true}
+                        />
+                    </CardBody>
+
                 </Card>
+                <Button color="primary" on:click={exportDatabase}>
+                    Export JSON
+                </Button>
             </Col>
         </Row>
     {/if}
@@ -557,49 +622,40 @@
     <div class="command-grid">
         {#each Object.entries(grouped) as [groupedIcon, cmds]}
             <div class="command-group">
-<!--                <InputGroup bsSize="sm" class="mb-2 bg-dark-subtle  bg-gradient rounded" style="width:100%">-->
-<!--                    <span-->
-<!--                            class="input-group-text p-0"-->
-<!--                    ><img src="{resolveIconUrl(groupedIcon, userIcons)}"-->
-<!--                          width="40"-->
-<!--                          height="40"-->
-<!--                          class="p-2"/>-->
-<!--                    </span>-->
 
-<!--                    <span  class="input-group-text flex-grow-1"-->
-<!--                    >{groupedIcon}-->
-<!--                    </span>-->
-<!--                    <Button color="dark"-->
-<!--                            bsSize="sm"-->
-<!--                            on:click={() => showModifyCategoryModal(groupedIcon)}-->
-<!--                            >-->
-<!--                        <Icon name="pencil-fill" />-->
-<!--                    </Button>-->
-<!--                </InputGroup>-->
                 <CategoryHeader currentIcon={groupedIcon} userIconsSet={userIcons} onClick={showModifyCategoryModal}/>
-<!--                <h5 class="bg-dark-subtle  bg-gradient rounded">-->
-<!--                    <img src="{resolveIconUrl(groupedIcon, userIcons)}"-->
-<!--                         width="40"-->
-<!--                         height="40"-->
-<!--                         class="p-2"/>-->
-<!--                    {groupedIcon}-->
-<!--                </h5>-->
+
                 <ListGroup class="commands-list">
 
                     {#each cmds as c}
                         <ListGroupItem tag="li" bsSize="sm" class="p-0">
                             <ButtonGroup bsSize="sm" class="w-100">
-                                <Button color="dark"
-                                        block="true"
-                                        bsSize="sm"
-                                        on:click={() => copy(c.command)}
-                                        id="btn-cmd-{c.id}">
-                                    <strong>{c.type === 'command' ? '>':'$'} {c.name}</strong>
-                                </Button>
+
+                                    {#if c.type === 'command'}
+                                        <Button color="dark"
+                                                block="true"
+                                                bsSize="sm"
+                                                on:click={() => copy(c.command)}
+                                                id="btn-cmd-{c.id}"
+                                                class="cmd-btn"
+                                        ><Badge pill={true} color="secondary" title="Command"> > </Badge>
+                                            <strong>{c.name}</strong>
+                                        </Button>
+                                    {:else}
+                                        <Button color="dark"
+                                                block="true"
+                                                bsSize="sm"
+                                                on:click={() => openCopyTemplateModal(c)}
+                                                id="btn-cmd-{c.id}"
+                                                class="cmd-btn"
+                                        ><Badge pill={true} color="primary" title="Template"> $ </Badge>
+                                        <strong>{c.name}</strong>
+                                        </Button>
+                                    {/if}
                                 <Button color="danger" bsSize="sm" on:click={() => openDeleteModal(c)} id="btn-cmd-delete-{c.id}">
                                     ✕
                                 </Button>
-                                <Button color="dark" bsSize="sm" on:click={() => openModifyModal(c)} id="btn-cmd-modify-{c.id}">
+                                <Button color="dark" bsSize="sm" on:click={() => openEditModal(c)} id="btn-cmd-modify-{c.id}">
                                     <Icon name="pencil-fill" />
                                 </Button>
                                 <Tooltip
@@ -661,20 +717,38 @@
 <!-- !delete Modal-->
 
 <!-- Modify Modal-->
-<BaseModal open={showModifyModal} onClose={closeModifyModal} title="Modification">
-    {#if commandToModify}
-        <CommandForm
-                bind:data={commandToModify}
-                {allIcons}
-                {userIcons}
-                submitLabel="Modifier"
-                onSubmit={updateCommandHandler}
-        />
+<BaseModal open={showEditModal} onClose={closeEditModal} title="Modification">
+
+    {#if itemToEdit}
+
+        {#if itemToEdit.type === "command"}
+
+            <CommandForm
+                    bind:data={itemToEdit}
+                    {allIcons}
+                    {userIcons}
+                    submitLabel="Modifier"
+                    onSubmit={updateItemHandler}
+            />
+
+        {:else }
+
+            <TemplateForm
+                    bind:data={itemToEdit}
+                    {allIcons}
+                    {userIcons}
+                    submitLabel="Modifier"
+                    onSubmit={updateItemHandler}
+            />
+
+        {/if}
+
     {/if}
 
-    <Button color="secondary" on:click={closeModifyModal}>
+    <Button color="secondary" on:click={closeEditModal}>
         Annuler
     </Button>
+
 </BaseModal>
 <!-- !Modify Modal-->
 
@@ -730,3 +804,49 @@
     </ModalBody>
 </Modal>
 <!-- !help Modal-->
+<!-- copy template Modal-->
+<BaseModal
+        open={showCopyTemplateModal}
+        title={templateToCopy?.name}
+        onClose={() => showCopyTemplateModal=false}
+>
+<!--    <div id="code" class="hljs dark">-->
+<!--        {@html templateContentPreview}-->
+<!--    </div>-->
+    <pre><code  class="hljs dark language-{templateToCopy?.type??'sql'}">
+            {@html templateContentPreview}
+    </code></pre>
+    {#if templateToCopy}
+        <h5>Parametres disponibles</h5>
+        {#each templateToCopy.params as p}
+
+            <div class="mb-2">
+                <InputGroup bsSize="sm">
+                    <label class="input-group-text">
+                        {p.name}
+                    </label>
+
+                    <Input
+
+                            type={p.type}
+                            placeholder={p.description}
+                            bind:value={paramValues[p.placeholder]}
+                            on:change={()=>{updateCopyTemplatePreview(templateToCopy, )}}
+                    />
+                </InputGroup>
+            </div>
+
+        {/each}
+
+    {/if}
+
+    <Button color="success" on:click={confirmTemplateCopy}>
+        Copier
+    </Button>
+
+    <Button color="secondary" on:click={() => showCopyTemplateModal=false}>
+        Annuler
+    </Button>
+
+</BaseModal>
+<!-- !copy template Modal-->

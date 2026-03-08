@@ -63,9 +63,9 @@
 </script>
 
 
-<ButtonDropdown class="d-contents" isOpen={dropdownOpen} toggle={toggle}>
+<ButtonDropdown class="flex-grow-1 cmd-workspace"  isOpen={dropdownOpen} toggle={toggle}>
 
-    <DropdownToggle caret color="secondary" size="sm">
+    <DropdownToggle caret color="warning" size="sm">
         {selectedWorkspace?.name ?? "Workspace"}
     </DropdownToggle>
 

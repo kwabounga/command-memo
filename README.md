@@ -149,3 +149,113 @@ https://github.com/tauri-apps/global-hotkey/blob/c9913a97667b3e44cb000de384cd893
 #### offset 
 en fonction de l'écran des ajustements ( décalages ) sont peut-être à faire sur votre os 
 
+
+--------
+## code pour du dev
+### autoalimenter la db pour faire des tests de front avec beaucoups d'éléments 
+
+```js
+/*    seed ( dev only ) */
+    async function seedDatabase() {
+        const icons = [
+            'nim',
+            'nix',
+            'nodejs',
+            'nodejs_1',
+            'nodejs_alt',
+            'nodemon',
+            'npm',
+            'npm_alt',
+            'nrwl',
+            'nuget',
+            'nunjucks',
+            'nuxt',
+            'ocaml',
+            'opa',
+            'opam',
+            'pascal',
+            'pawn',
+            'pdf',
+            'percy',
+            'perl',
+            'php',
+            'php_elephant',
+            'pipeline',
+            'postcss',
+            'posthtml',
+            'powerpoint',
+            'powershell',
+            'prettier',
+            'prisma',
+            'processing',
+            'processing_light',
+            'prolog',
+            'protractor',
+            'pug',
+            'puppet',
+            'purescript',
+            'python',
+            'qsharp',
+            'quasar',
+            'r',
+            'racket',
+            'raml',
+            'razor',
+            'react',
+            'react_ts',
+            'readme',
+            'reason',
+            'red',
+            'replit',
+            'rescript',
+            'restql',
+            'riot',
+        ];
+
+        console.log("🌱 Seeding database…");
+
+        for (const icon of icons) {
+            const count = Math.floor(Math.random() * 50) + 1;
+
+            for (let i = 1; i <= count; i++) {
+                await addCommand(
+                    `${icon} command ${i}`,
+                    `Description ${i} pour ${icon}`,
+                    `${icon} --do-something-${i}`,
+                    icon // 👈 colonne icon
+                );
+            }
+        }
+
+        await refresh();
+        console.log("✅ Seed terminé");
+    }
+
+
+    /*  delete all ( dev only ) */
+    async function deleteAll() {
+        if (!confirm("⚠️ Supprimer TOUTES les commandes ?")) return;
+
+        console.log("🧨 Deleting all commands…");
+
+        const all = await getCommands("");
+        for (const c of all) {
+            await deleteCommand(c.id);
+        }
+
+        await refresh();
+        console.log("✅ Database cleared");
+    }
+
+```
+
+```html
+<!--                 Seed Db (dev Only)-->
+            <Button color="warning" bsSize="sm" on:click={seedDatabase}>
+                🌱 Seed DB (DEV)
+            </Button>
+<!--                 Delete All (dev Only)-->
+            <Button color="danger" bsSize="sm" on:click={deleteAll}>
+                🧨 Delete ALL (DEV)
+            </Button>
+```

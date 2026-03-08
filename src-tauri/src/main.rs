@@ -31,6 +31,8 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, WindowEvent, Wry,
 };
+use tauri_plugin_dialog;
+use tauri_plugin_fs;
 use tauri_plugin_autostart;
 use tauri_plugin_clipboard_manager;
 use tauri_plugin_global_shortcut::{GlobalShortcut, Shortcut, ShortcutState};
@@ -86,6 +88,9 @@ fn main() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        // ✅ Export file
+         .plugin(tauri_plugin_dialog::init())
+         .plugin(tauri_plugin_fs::init())
         // ✅ Global Shortcut
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -175,6 +180,15 @@ fn main() {
                         sql: "
                             -- workspaces
                             ALTER TABLE workspaces ADD COLUMN last_used INTEGER DEFAULT 0;
+                        ",
+                        kind: MigrationKind::Up,
+                    },
+                    Migration {
+                        version: 4,
+                        description: "add language type for templates",
+                        sql: "
+                            -- workspaces
+                            ALTER TABLE templates ADD COLUMN type TEXT DEFAULT '';
                         ",
                         kind: MigrationKind::Up,
                     },
