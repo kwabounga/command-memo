@@ -1,7 +1,7 @@
 {
   "name": "command-memo",
   "version": "1.0.0",
-  "description": "",
+  "description": "Command Memo",
   "type": "module",
   "scripts": {
     "dev": "vite dev",

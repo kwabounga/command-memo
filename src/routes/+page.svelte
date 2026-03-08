@@ -6,10 +6,12 @@
     import {onMount} from "svelte";
     import {
         addCommand, deleteCommand, getCommands, updateCommand, updateCategorie, setCurrentWorkspace,
-        getCurrentWorkspace, getTemplates, addTemplate, updateTemplate, exportAllData
+        getCurrentWorkspace, getTemplates, addTemplate, updateTemplate, exportAllData, importAllData, closeDb
     } from "$lib/db";
-    import { save } from "@tauri-apps/plugin-dialog";
-    import { writeTextFile } from "@tauri-apps/plugin-fs";
+
+
+    import { save, open } from "@tauri-apps/plugin-dialog";
+    import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
     import {writeText} from "@tauri-apps/plugin-clipboard-manager";
     import {getCurrentWindow} from "@tauri-apps/api/window";
     import { enable, disable, isEnabled,  } from "@tauri-apps/plugin-autostart";
@@ -121,14 +123,13 @@
      * focus input element
      * @param _input
      */
-    function focusInput(_input: HTMLInputElement | null) {
+    function focusInput(_input: HTMLInputElement | null, andSelect = false) {
         if (!_input) return;
 
-        requestAnimationFrame(() => {
-            _input.focus();
+        _input.focus();
+        if(andSelect){
             _input.select();
-            console.log("🔎 focus", _input.name || _input.id);
-        });
+        }
     }
 
     /**
@@ -229,21 +230,40 @@
      * global handler to catch keyboard events
      * @param e
      */
+    // function handleKeyup(e: KeyboardEvent) {
+    //     console.log('ctrl + f', e)
+    //     if(e.ctrlKey && e.key === "f"){
+    //         e.preventDefault();
+    //         toggleAdd(true)
+    //         focusInput(searchInput, true);
+    //     }
+    // }
     function handleKeydown(e: KeyboardEvent) {
-
+        //e.stopPropagation();
         // Escape → close
         if (e.key === "Escape") {
             e.preventDefault();
-            appWindow?.hide();
+            if(showAdd){
+               showAdd = false;
+               console.log('ici?')
+               focusInput(searchInput, true);
+            }else{
+                appWindow?.hide();
+            }
         }
 
-        // pour éviter de toogle si l'on tape + dans l'input
-        const target = e.target as HTMLElement;
-        if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") {
-            return;
+        if(e.ctrlKey && e.key === "f"){
+            e.preventDefault();
+            focusInput(searchInput, true);
         }
+
         // + → toggle add panel
         if (e.key === "+" || e.key === "=") {
+            // pour éviter de toogle si l'on tape + dans l'input
+            const target = e.target as HTMLElement;
+            if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") {
+                return;
+            }
             // (= correspond souvent à + sans shift)
             e.preventDefault();
             toggleAdd();
@@ -272,7 +292,11 @@
     /**
      * show / hide add Command Block
      */
-    function toggleAdd() {
+    function toggleAdd(forceHide:boolean = false) {
+        if(forceHide){
+            showAdd = false;
+            return;
+        }
         showAdd = !showAdd;
 
         // reset new command /template object
@@ -291,8 +315,10 @@
                 content: "",
                 params: [],
                 icon,
+                type:"sql",
                 workspace_id: null
             }
+            focusInput(document.querySelector('#cmd-name-input'));
         }
     }
 
@@ -382,20 +408,25 @@
 
     let categoryToModifyOld:string = "";
     let categoryToModifyNew:string = "";
+    let categoryToModifyWorkspace:any|null = null;
     let modifyCategoryModalOpen:boolean = false;
 
     function closeModifyCategoryModal(){
         categoryToModifyOld = "";
         categoryToModifyNew = ""
+        categoryToModifyWorkspace = null
         modifyCategoryModalOpen = false;
     }
 
     function showModifyCategoryModal(cat:string){
         categoryToModifyOld = cat;
+        categoryToModifyNew = categoryToModifyOld;
+        categoryToModifyWorkspace = structuredClone(workspace);
         modifyCategoryModalOpen = true;
     }
     async function confirmModifyCategoryModal(){
-        await updateCategorie(categoryToModifyOld, categoryToModifyNew);
+        console.log('categoryToModifyWorkspace', categoryToModifyWorkspace)
+        await updateCategorie(categoryToModifyOld, categoryToModifyNew, categoryToModifyWorkspace?.id??null);
         await refresh();
         closeModifyCategoryModal()
     }
@@ -476,23 +507,37 @@
 
         // keyboard event handler
         window.addEventListener("keydown", handleKeydown);
+        // window.addEventListener("keyup", handleKeyup);
 
         // // focus initial
-        // focusInput(searchInput);
+        searchInput = document.querySelector("#search-input");
+        focusInput(searchInput, true);
 
         // 🔥 focus à chaque affichage de la fenêtre
-        const unlisten = await appWindow?.listen("tauri://focus", () => {
-            focusInput(searchInput);
-        });
+        // const unlisten = await appWindow?.listen("tauri://focus", () => {
+        //     focusSearch();
+        // });
 
         // autostart ?
         autoStartEnabled = await isEnabled();
 
         return () => {
             window.removeEventListener("keydown", handleKeydown);
-            unlisten();
+            // unlisten();
         };
     });
+    // function focusSearch() {
+    //     // requestAnimationFrame(() => {
+    //     //
+    //     // });
+    //     console.log('active element');
+    //     const activeElement = document.querySelector("#search-input:focus");
+    //     console.log(activeElement);
+    //     if(searchInput === activeElement) return;
+    //     searchInput?.focus();
+    //     searchInput?.select();
+    //     console.log("� focus search");
+    // }
     async function exportDatabase() {
 
         const data = await exportAllData();
@@ -514,32 +559,31 @@
 
         console.log("Export saved to", path);
     }
-    // async function exportDatabase() {
-    //
-    //     const data = await exportAllData();
-    //
-    //     const json = JSON.stringify(data, null, 2);
-    //     console.log(json);
-    //     const blob = new Blob([json], {
-    //         type: "application/json"
-    //     });
-    //     console.log('ICI');
-    //
-    //     const url = URL.createObjectURL(blob);
-    //     console.log('LA');
-    //
-    //     const a = document.createElement("a");
-    //
-    //     a.href = url;
-    //     a.download = `commands-backup-${Date.now()}.json`;
-    //
-    //     a.click();
-    //     console.log('click');
-    //
-    //     URL.revokeObjectURL(url);
-    //     console.log('END');
-    //
-    // }
+    async function saveCurrentDatabaseThenImport() {
+        // console.log('étape 1: export');
+        // await exportDatabase();
+        console.log('étape 2: import');
+        await importDatabase();
+        console.log('fin');
+    }
+    async function importDatabase() {
+        await closeDb();
+
+        const file = await open({
+            filters: [{ name: "JSON", extensions: ["json"] }]
+        });
+
+        if (!file) return;
+
+        const content = await readTextFile(file as string);
+
+        const json = JSON.parse(content);
+
+        await importAllData(json);
+
+        await refresh();
+
+    }
 </script>
 
 
@@ -595,9 +639,17 @@
                     </CardBody>
 
                 </Card>
-                <Button color="primary" on:click={exportDatabase}>
-                    Export JSON
-                </Button>
+                <Card class="p-3 mt-2 data-card" theme="light">
+                    <CardBody class="flex-auto">
+                        <Button class="flex-grow-1" color="primary" on:click={exportDatabase}>
+                            Export JSON
+                        </Button>
+                        <Button class="flex-grow-1" color="warning" on:click={saveCurrentDatabaseThenImport}>
+                            Import JSON
+                        </Button>
+                    </CardBody>
+
+                </Card>
             </Col>
         </Row>
     {/if}
@@ -613,7 +665,6 @@
                     <Input id="search-input"
                            name="search-input"
                            placeholder="Recherche"
-                           innerRef={searchInput}
                            bind:value={search}
                            on:input={refresh}/>
         </InputGroup>
@@ -623,7 +674,7 @@
         {#each Object.entries(grouped) as [groupedIcon, cmds]}
             <div class="command-group">
 
-                <CategoryHeader currentIcon={groupedIcon} userIconsSet={userIcons} onClick={showModifyCategoryModal}/>
+                <CategoryHeader currentIcon={groupedIcon} currentWorkspaceId={workspace?.id ?? null} userIconsSet={userIcons} onClick={showModifyCategoryModal}/>
 
                 <ListGroup class="commands-list">
 
@@ -764,6 +815,11 @@
                 icons={allIcons}
                 {userIcons}
         />
+        <WorkspaceDropdown
+            selectedWorkspace={categoryToModifyWorkspace}
+            onChange={(ws)=>{categoryToModifyWorkspace = ws}}
+            canCreate={false}
+        ></WorkspaceDropdown>
     {/if}
 
     <div class="wrapper" slot="footer">
@@ -810,18 +866,16 @@
         title={templateToCopy?.name}
         onClose={() => showCopyTemplateModal=false}
 >
-<!--    <div id="code" class="hljs dark">-->
-<!--        {@html templateContentPreview}-->
-<!--    </div>-->
-    <pre><code  class="hljs dark language-{templateToCopy?.type??'sql'}">
-            {@html templateContentPreview}
-    </code></pre>
     {#if templateToCopy}
         <h5>Parametres disponibles</h5>
+        <p>{templateToCopy?.description}</p>
+        <hr>
+        <h6>Prévisualisation</h6>
+        <pre><code  class="code-preview hljs dark language-{templateToCopy?.type??'sql'}">{@html templateContentPreview}</code></pre>
+        <hr>
         {#each templateToCopy.params as p}
-
             <div class="mb-2">
-                <InputGroup bsSize="sm">
+                <InputGroup bsSize="sm" id="tpl-{templateToCopy.id}-param-{p.id}">
                     <label class="input-group-text">
                         {p.name}
                     </label>
@@ -829,17 +883,25 @@
                     <Input
 
                             type={p.type}
-                            placeholder={p.description}
+                            placeholder={p.placeholder}
                             bind:value={paramValues[p.placeholder]}
-                            on:change={()=>{updateCopyTemplatePreview(templateToCopy, )}}
+                            on:input={()=>{updateCopyTemplatePreview()}}
                     />
-                </InputGroup>
+                </InputGroup><Tooltip
+                    animation
+                    content="{p.description}"
+                    delay={0}
+                    id="tooltip-tpl-{templateToCopy.id}-param-{p.id}"
+                    placement="bottom"
+                    target="tpl-{templateToCopy.id}-param-{p.id}"
+                    theme="dark"
+            />
             </div>
 
         {/each}
 
     {/if}
-
+    <hr>
     <Button color="success" on:click={confirmTemplateCopy}>
         Copier
     </Button>

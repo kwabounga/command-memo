@@ -10,6 +10,7 @@
 
     export let params = [];
     export let onChange = undefined;
+    export let id = 'tpl-parameters';
 
     let dropdownOpen = false;
     let editingIndex = null;
@@ -80,7 +81,7 @@
     }
 </script>
 
-<ButtonDropdown isOpen={dropdownOpen} toggle={toggle}>
+<ButtonDropdown id="{id}" isOpen={dropdownOpen} toggle={toggle}>
 
     <DropdownToggle caret size="sm" color="info">
         Params ({params.length})

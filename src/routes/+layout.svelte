@@ -41,6 +41,10 @@
         overflow-y: auto;
         max-height: 25rem;
     }
+    :global(.code-preview) {
+        overflow-y: scroll;
+        max-height: 25rem;
+    }
 
     :global(.cmd-btn) {
         text-align: start!important;
@@ -61,10 +65,13 @@
         padding: var(--bs-card-cap-padding-y);
         font-weight: bolder;
         font-size: calc(var(--bs-body-font-size) * 1.5);
-        // text-align: center;
         font-family: var(--bs-body-font-family), sans-serif;
     }
     :global(.workspace-card .card-body) {
+        display:flex;
+        padding: 0;
+    }
+    :global(.data-card .card-body) {
         display:flex;
         padding: 0;
     }

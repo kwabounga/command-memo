@@ -1,5 +1,4 @@
 import { GLOBAL_WORKSPACE } from "$lib/stores/workspace";
-// import type { Template, TemplateParams } from "../routes/+page.svelte";
 import type {Command, Template, TemplateParams, CmdItem, Workspace} from "$lib/types";
 let db: any = null;
 
@@ -13,6 +12,10 @@ async function getDb() {
 
     const Database = (await import("@tauri-apps/plugin-sql")).default;
     db = await Database.load("sqlite:commands.db");
+
+    await db.execute("PRAGMA journal_mode=WAL");
+    await db.execute("PRAGMA synchronous=NORMAL");
+
     return db;
 }
 
@@ -21,10 +24,8 @@ async function getDb() {
 /////////////////////////////
 
 export async function getCommands(search = "", workspaceId:number|null = null) {
-    console.log('get commands')
-    console.log(workspaceId);
-    const database = await getDb();
 
+    const database = await getDb();
     return database.select(
         `
         SELECT * FROM commands
@@ -44,7 +45,6 @@ export async function addCommand(
     workspaceId:number|null|undefined = null
 ) {
     const database = await getDb();
-
     await database.execute(
         `
         INSERT INTO commands (name, description, command, icon, workspace_id)
@@ -55,20 +55,14 @@ export async function addCommand(
 }
 
 export async function deleteCommand(id: number) {
+
     const database = await getDb();
     await database.execute("DELETE FROM commands WHERE id = ?", [id]);
 }
 
-export async function updateCommand(cmd: {
-    id: number;
-    name: string;
-    command: string;
-    description: string;
-    icon: string;
-    workspace_id: number|null;
-}) {
-    const database = await getDb();
+export async function updateCommand(cmd: Command) {
 
+    const database = await getDb();
     await database.execute(
         `
         UPDATE commands
@@ -86,16 +80,24 @@ export async function updateCommand(cmd: {
     );
 }
 
-export async function updateCategorie(oldIcon: string, newIcon: string) {
-    const database = await getDb();
+export async function updateCategorie(oldIcon: string, newIcon: string, workspaceId: number|null) {
 
+    const database = await getDb();
     await database.execute(
         `
         UPDATE commands
-        SET icon = ?
+        SET icon = ?, workspace_id = ?
         WHERE icon = ?
         `,
-        [newIcon, oldIcon]
+        [newIcon, workspaceId, oldIcon]
+    );
+    await database.execute(
+        `
+        UPDATE templates
+        SET icon = ?, workspace_id = ?
+        WHERE icon = ?
+        `,
+        [newIcon, workspaceId, oldIcon]
     );
 }
 
@@ -104,16 +106,16 @@ export async function updateCategorie(oldIcon: string, newIcon: string) {
 /////////////////////////////
 
 export async function getWorkspaces() {
-    const database = await getDb();
 
+    const database = await getDb();
     return database.select(
         `SELECT * FROM workspaces ORDER BY id`
     );
 }
 
 export async function addWorkspace(name: string) {
-    const database = await getDb();
 
+    const database = await getDb();
     const ws = await database.execute(
         `
         INSERT INTO workspaces (name)
@@ -125,8 +127,8 @@ export async function addWorkspace(name: string) {
 }
 
 export async function deleteWorkspace(id: number) {
-    const database = await getDb();
 
+    const database = await getDb();
     await database.execute(
         `DELETE FROM workspaces WHERE id = ?`,
         [id]
@@ -134,8 +136,8 @@ export async function deleteWorkspace(id: number) {
 }
 
 export async function updateWorkspace(id: number, name: string) {
-    const database = await getDb();
 
+    const database = await getDb();
     await database.execute(
         `
         UPDATE workspaces
@@ -146,23 +148,9 @@ export async function updateWorkspace(id: number, name: string) {
     );
 }
 // la partie workspace 'courant'
-// export async function getCurrentWorkspace() {
-//     const database = await getDb();
-//
-//     const rows = await database.select(`
-//         SELECT *
-//         FROM workspaces
-//         ORDER BY last_used DESC
-//         LIMIT 1
-//     `);
-//
-//     return rows[0] ?? null;
-// }
-
 export async function getCurrentWorkspace() {
 
     const database = await getDb();
-
     const rows = await database.select(`
     SELECT *
     FROM workspaces
@@ -178,23 +166,9 @@ export async function getCurrentWorkspace() {
     return rows[0];
 }
 
-// export async function setCurrentWorkspace(id: number) {
-//     const database = await getDb();
-//
-//     await database.execute(
-//         `
-//         UPDATE workspaces
-//         SET last_used = strftime('%s','now')
-//         WHERE id = ?
-//         `,
-//         [id]
-//     );
-// }
 export async function setCurrentWorkspace(id:number|null) {
-    console.log('setCurrentWorkspace');
-    console.log(id);
-    const database = await getDb();
 
+    const database = await getDb();
     if (id === null) {
         console.log('is null : reset last_used');
         await database.execute(`
@@ -217,22 +191,9 @@ export async function setCurrentWorkspace(id:number|null) {
 // TEMPLATES
 /////////////////////////////
 
-// export async function getTemplates(workspaceId = null) {
-//     const database = await getDb();
-//
-//     return database.select(
-//         `
-//         SELECT * FROM templates
-//         WHERE workspace_id = ? OR workspace_id IS NULL
-//         ORDER BY name
-//         `,
-//         [workspaceId]
-//     );
-// }
 export async function getTemplates(search = "", workspaceId:number|null = null) {
 
     const database = await getDb();
-
     const rows = await database.select(
         `
         SELECT
@@ -287,29 +248,6 @@ export async function getTemplates(search = "", workspaceId:number|null = null) 
 
     return [...templatesMap.values()];
 }
-// export async function addTemplate(
-//     name: string,
-//     description: string,
-//     content: string,
-//     icon: string,
-//     params: {type:string,description:string,placeHolder:string,name:string }[]=[],
-//     workspaceId = null
-// ) {
-//     const database = await getDb();
-//
-//     const template =  await database.execute(
-//         `
-//         INSERT INTO templates (name, description, content, icon, workspace_id)
-//         VALUES (?, ?, ?, ?, ?)
-//         `,
-//         [name, description, content, icon, workspaceId]
-//     );
-//     console.log('template', template);
-//     for (const param of params) {
-//         console.log('param', param);
-//         await addTemplateParam(template.lastInsertId, param.type, param.placeHolder, param.description, param.name)
-//     }
-// }
 export async function addTemplate(
     name:string,
     description:string,
@@ -321,7 +259,6 @@ export async function addTemplate(
 ) {
 
     const database = await getDb();
-
     const result = await database.execute(
         `
         INSERT INTO templates (name, description, content, icon, workspace_id, type)
@@ -353,40 +290,13 @@ export async function addTemplate(
 
     return templateId;
 }
-// export async function updateTemplate(template: {
-//     id: number;
-//     name: string;
-//     description: string;
-//     body: string;
-//     icon: string;
-//     workspace_id: number;
-// }) {
-//     const database = await getDb();
-//
-//     await database.execute(
-//         `
-//         UPDATE templates
-//         SET name = ?, description = ?, body = ?, icon = ?, workspace_id = ?
-//         WHERE id = ?
-//         `,
-//         [
-//             template.name,
-//             template.description,
-//             template.body,
-//             template.icon,
-//             template.workspace_id,
-//             template.id
-//         ]
-//     );
-// }
 export async function updateTemplate(template:Template) {
 
     const database = await getDb();
-
     await database.execute(
         `
         UPDATE templates
-        SET name = ?, description = ?, content = ?, icon = ?, workspace_id = ?
+        SET name = ?, description = ?, content = ?, icon = ?, workspace_id = ?, type = ?
         WHERE id = ?
         `,
         [
@@ -395,6 +305,7 @@ export async function updateTemplate(template:Template) {
             template.content,
             template.icon,
             template.workspace_id,
+            template.type,
             template.id
         ]
     );
@@ -468,7 +379,13 @@ export async function updateTemplate(template:Template) {
 }
 export async function deleteTemplate(id: number) {
     const database = await getDb();
-
+    await database.execute(
+        `
+            DELETE FROM template_params
+            WHERE template_id = ?
+        `,
+        [id]
+    );
     await database.execute(
         `DELETE FROM templates WHERE id = ?`,
         [id]
@@ -481,7 +398,6 @@ export async function deleteTemplate(id: number) {
 
 export async function getTemplateParams(templateId: number) {
     const database = await getDb();
-
     return database.select(
         `
         SELECT * FROM template_params
@@ -500,7 +416,6 @@ export async function addTemplateParam(
     name: string  // name
 ) {
     const database = await getDb();
-
     await database.execute(
         `
         INSERT INTO template_params
@@ -513,7 +428,6 @@ export async function addTemplateParam(
 
 export async function deleteTemplateParam(id: number) {
     const database = await getDb();
-
     await database.execute(
         `
         DELETE FROM template_params
@@ -530,7 +444,6 @@ export async function updateTemplateParam(param: {
     description: string;
 }) {
     const database = await getDb();
-
     await database.execute(
         `
         UPDATE template_params
@@ -549,7 +462,6 @@ export async function updateTemplateParam(param: {
 export async function exportAllData() {
 
     const database = await getDb();
-
     const commands = await database.select(`
         SELECT * FROM commands
     `);
@@ -576,4 +488,143 @@ export async function exportAllData() {
             workspaces
         }
     };
+}
+
+export async function resetDatabase() {
+
+    const database = await getDb();
+
+    await database.execute(`DELETE FROM template_params`);
+    await database.execute(`DELETE FROM templates`);
+    await database.execute(`DELETE FROM commands`);
+    await database.execute(`DELETE FROM workspaces`);
+
+}
+
+export async function closeDb() {
+    if (db) {
+        await db.close();
+        db = null;
+    }
+}
+export async function importAllData(jsonData: any) {
+
+    const database = await getDb();
+
+    if (!jsonData?.data) {
+        throw new Error("Invalid import file");
+    }
+
+    const { commands, templates, template_params, workspaces } = jsonData.data;
+
+    console.log("Import started");
+
+    try {
+
+        await database.execute("BEGIN");
+
+        /////////////////////////////
+        // CLEAN
+        /////////////////////////////
+
+        await database.execute("DELETE FROM template_params");
+        await database.execute("DELETE FROM templates");
+        await database.execute("DELETE FROM commands");
+        await database.execute("DELETE FROM workspaces");
+
+        /////////////////////////////
+        // WORKSPACES
+        /////////////////////////////
+
+        for (const ws of workspaces) {
+
+            await database.execute(
+                `INSERT INTO workspaces (id,name,last_used)
+                 VALUES (?,?,?)`,
+                [ws.id, ws.name, ws.last_used ?? 0]
+            );
+
+        }
+
+        /////////////////////////////
+        // COMMANDS
+        /////////////////////////////
+
+        for (const cmd of commands) {
+
+            await database.execute(
+                `INSERT INTO commands
+                (id,name,description,command,icon,workspace_id)
+                VALUES (?,?,?,?,?,?)`,
+                [
+                    cmd.id,
+                    cmd.name,
+                    cmd.description,
+                    cmd.command,
+                    cmd.icon,
+                    cmd.workspace_id
+                ]
+            );
+
+        }
+
+        /////////////////////////////
+        // TEMPLATES
+        /////////////////////////////
+
+        for (const tpl of templates) {
+
+            await database.execute(
+                `INSERT INTO templates
+                (id,name,description,content,icon,workspace_id,type)
+                VALUES (?,?,?,?,?,?,?)`,
+                [
+                    tpl.id,
+                    tpl.name,
+                    tpl.description,
+                    tpl.content,
+                    tpl.icon,
+                    tpl.workspace_id,
+                    tpl.type ?? "sql"
+                ]
+            );
+
+        }
+
+        /////////////////////////////
+        // TEMPLATE PARAMS
+        /////////////////////////////
+
+        for (const param of template_params) {
+
+            await database.execute(
+                `INSERT INTO template_params
+                (id,template_id,name,type,placeholder,description)
+                VALUES (?,?,?,?,?,?)`,
+                [
+                    param.id,
+                    param.template_id,
+                    param.name,
+                    param.type,
+                    param.placeholder,
+                    param.description
+                ]
+            );
+
+        }
+
+        await database.execute("COMMIT");
+
+        console.log("Import success");
+
+    } catch (err) {
+
+        console.error("Import failed:", err);
+
+        await database.execute("ROLLBACK");
+
+        throw err;
+
+    }
+
 }

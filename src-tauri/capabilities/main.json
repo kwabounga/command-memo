@@ -29,7 +29,9 @@
     "autostart:allow-is-enabled",
 
     "fs:allow-app-write",
+    "fs:allow-app-read",
 
+    "dialog:allow-open",
     "dialog:allow-save",
     "dialog:default"
 

@@ -6,7 +6,7 @@
     import {getWorkspaces} from "$lib/db";
     import {GLOBAL_WORKSPACE} from "$lib/stores/workspace";
     import WorkspaceDropdown from "$lib/components/WorkspaceDropdown.svelte";
-    import type { Template } from "$lib/types";
+    import type {Template, Workspace} from "$lib/types";
     let params = [];
     export let data:Template = {
         name: "",
@@ -24,7 +24,7 @@
     export let onSubmit: () => void;
     export let submitLabel = "Ajouter";
 
-    let workspace = null;
+    let workspace:Workspace|null = null;
     let workspaces = [];
 
 
@@ -38,7 +38,7 @@
             w => w.id === data.workspace_id
         ) ?? GLOBAL_WORKSPACE;
     });
-    function workspaceChanged(ws) {
+    function workspaceChanged(ws:Workspace) {
 
         workspace = ws;
 
@@ -61,16 +61,25 @@
             content="Un nom pour le Template"
             delay={0}
             id="tpl-name-input-tooltip{ data?.id ? `-${data.id}` : '' }"
-            placement="auto"
+            placement="bottom"
             target="tpl-name-input{ data?.id ? `-${data.id}` : '' }"
             theme="light"
     />
-    <IconSelect
+    <IconSelect id="tpl-icon-part{ data?.id ? `-${data.id}` : '' }"
             bind:value={data.icon}
             icons={allIcons}
             {userIcons}
     />
-    <InputGroup>
+    <Tooltip
+            animation
+            content="Icon choisi"
+            delay={0}
+            id="tpl-icon-part-tooltip{ data?.id ? `-${data.id}` : '' }"
+            placement="bottom"
+            target="tpl-icon-part{ data?.id ? `-${data.id}` : '' }"
+            theme="light"
+    />
+    <InputGroup id="tpl-workspace-part{ data?.id ? `-${data.id}` : '' }">
         <span class="input-group-text"
         >Environnement</span>
         <WorkspaceDropdown
@@ -80,20 +89,11 @@
     </InputGroup>
     <Tooltip
             animation
-            content="icon utilisé pour grouper les Templates entre eux"
+            content="environnement lié (laisser global pour alimenter tous les environnements)"
             delay={0}
-            id="tpl-icon-selector-tooltip{ data?.id ? `-${data.id}` : '' }"
-            placement="auto"
-            target="tpl-icon-selector{ data?.id ? `-${data.id}` : '' }"
-            theme="light"
-    />
-    <Tooltip
-            animation
-            content="Icon choisi"
-            delay={0}
-            id="tpl-icon-part-tooltip{ data?.id ? `-${data.id}` : '' }"
-            placement="right"
-            target="tpl-icon-part{ data?.id ? `-${data.id}` : '' }"
+            id="tpl-workspace-tooltip{ data?.id ? `-${data.id}` : '' }"
+            placement="bottom"
+            target="tpl-workspace-part{ data?.id ? `-${data.id}` : '' }"
             theme="light"
     />
     <Input id="tpl-description-input{ data?.id ? `-${data.id}` : '' }"
@@ -108,7 +108,7 @@
             content="description détaillée du Template & utilisation"
             delay={0}
             id="tpl-description-input-tooltip{ data?.id ? `-${data.id}` : '' }"
-            placement="auto"
+            placement="bottom"
             target="tpl-description-input{ data?.id ? `-${data.id}` : '' }"
             theme="light"
     />
@@ -127,10 +127,19 @@
             target="tpl-cmd-input{ data?.id ? `-${data.id}` : '' }"
             theme="light"
     />
-    <TemplateParamsManager
+    <TemplateParamsManager id="tpl-parameters-part{ data?.id ? `-${data.id}` : '' }"
             bind:params={data.params}
     />
 
+    <Tooltip
+            animation
+            content="Parametre du template cle/placeholder doit correspondre avec une clé dans le template"
+            delay={0}
+            id="tpl-parameters-tooltip{ data?.id ? `-${data.id}` : '' }"
+            placement="bottom"
+            target="tpl-parameters-part{ data?.id ? `-${data.id}` : '' }"
+            theme="light"
+    />
     <InputGroup>
         <span class="input-group-text"
         >Language</span>
