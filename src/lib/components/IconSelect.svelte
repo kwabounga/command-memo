@@ -5,11 +5,12 @@
     export let icons: string[] = [];
     export let userIcons: Set<string>;
     export let label = "Icône";
+    export let id = "icon-id";
 
     import { resolveIconUrl } from "$lib/iconResolver";
 </script>
 
-<InputGroup bsSize="sm" class="mb-2">
+<InputGroup size="sm" class="mb-2" id={id}>
     <span
             class="input-group-text"
             id="icon-part"><img
@@ -20,7 +21,7 @@
     <Input
             id="icon-selector"
             type="select"
-           bsSize="sm"
+           size="sm"
            bind:value
            aria-label="Username"
            aria-describedby="icon-part">
