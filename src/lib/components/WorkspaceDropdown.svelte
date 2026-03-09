@@ -9,7 +9,7 @@
 
     import { getWorkspaces, addWorkspace } from "../db";
 
-    export let selectedWorkspace = null;
+    export let selectedWorkspace:Workspace|null = null;
     export let canCreate = false;
     export let onChange: ((ws:any)=>void) | undefined;
 
@@ -19,6 +19,7 @@
     let showAdd = false;
 
     import { GLOBAL_WORKSPACE } from "../stores/workspace";
+    import type {Workspace} from "$lib/types";
 
     function toggle() {
         dropdownOpen = !dropdownOpen;
@@ -88,19 +89,17 @@
         {#if canCreate}
             <DropdownItem divider />
 
-            <DropdownItem on:click={(e) => {e.preventDefault(); showAdd = !showAdd}}>
+            <DropdownItem  on:click={(e) => {e.preventDefault(); showAdd = !showAdd}} toggle={false}>
                 ➕ Add workspace
             </DropdownItem>
 
             {#if showAdd}
 
                 <div style="padding:10px; width:220px">
-
                     <Input
                             placeholder="Workspace name"
                             bind:value={newWorkspace}
                     />
-
                     <Button
                             size="sm"
                             color="primary"
@@ -109,7 +108,6 @@
                     >
                         Create
                     </Button>
-
                 </div>
 
             {/if}

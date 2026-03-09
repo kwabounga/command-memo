@@ -44,7 +44,45 @@
 
         data.workspace_id = ws?.id ?? null;
     }
-    const languages = ['sql', 'html', 'shell', 'bash', 'php'];
+    const languages = [
+        'bash',
+        'c',
+        'cpp',
+        'csharp',
+        'css',
+        'diff',
+        'go',
+        'graphql',
+        'html',
+        'ini',
+        'java',
+        'javascript',
+        'json',
+        'kotlin',
+        'less',
+        'lua',
+        'makefile',
+        'markdown',
+        'objectivec',
+        'perl',
+        'php-template',
+        'php',
+        'plaintext',
+        'python-repl',
+        'python',
+        'r',
+        'ruby',
+        'rust',
+        'scss',
+        'shell',
+        'sql',
+        'swift',
+        'typescript',
+        'vbnet',
+        'wasm',
+        'xml',
+        'yaml',
+    ];
 </script>
 
 <style>
@@ -79,7 +117,7 @@
             target="tpl-icon-part{ data?.id ? `-${data.id}` : '' }"
             theme="light"
     />
-    <InputGroup id="tpl-workspace-part{ data?.id ? `-${data.id}` : '' }">
+    <InputGroup id="tpl-workspace-part{ data?.id ? `-${data.id}` : '' }" class="mb-2">
         <span class="input-group-text"
         >Environnement</span>
         <WorkspaceDropdown
@@ -140,15 +178,14 @@
             target="tpl-parameters-part{ data?.id ? `-${data.id}` : '' }"
             theme="light"
     />
-    <InputGroup>
+    <InputGroup class="mb-2 ">
         <span class="input-group-text"
         >Language</span>
-        <select class="input-group-select flex-grow-1 bg-light text-dark" bind:value={data.type}>
+        <select class="input-group-select flex-grow-1 select-rounded-right" bind:value={data.type}>
             {#each languages as l }
                 <option value={l}>{l}</option>
             {/each}
         </select>
-        <span class="input-group-text"></span>
     </InputGroup>
     <Button block="true" on:click={onSubmit}  id="tpl-btn-input{ data?.id ? `-${data.id}` : '' }"
             class="mb-2"

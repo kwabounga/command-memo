@@ -2,11 +2,12 @@
     import {Modal, ModalBody, ModalFooter, ModalHeader} from "@sveltestrap/sveltestrap";
 
     export let open = false;
+    export let fullscreen = false;
     export let title = "";
     export let onClose = () => {};
 </script>
 
-<Modal isOpen={open} toggle={onClose} centered>
+<Modal isOpen={open} toggle={onClose} centered fullscreen={fullscreen}>
     <ModalHeader toggle={onClose}>
         {title}
     </ModalHeader>

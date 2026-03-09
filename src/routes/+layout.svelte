@@ -1,6 +1,15 @@
 <script lang="ts">
     import {Styles} from '@sveltestrap/sveltestrap';
-    import 'highlight.js/styles/github.css';
+
+    // import 'highlight.js/styles/atom-one-dark.css';
+    // import 'highlight.js/styles/atom-one-light.css';
+    // import 'highlight.js/styles/dark.css';
+    // import 'highlight.js/styles/cybertopia-saturated.css';
+    // import 'highlight.js/styles/github.css';
+    // import 'highlight.js/styles/github-dark.css';
+
+    import '$lib/styles/highlight.css';
+
 </script>
 
 <Styles theme="dark"/>
@@ -12,7 +21,7 @@
         --nb-col: 4;
     }
     :global(.bg-dark.alpha) {
-        --bs-bg-opacity: 0.8;
+        --bs-bg-opacity: 0.4;
     }
     :global(.main-wrapper) {
         background: transparent;
@@ -61,11 +70,17 @@
         position: relative;
     }
 
-    :global(.workspace-card .card-header) {
+    :global(.card-header) {
         padding: var(--bs-card-cap-padding-y);
-        font-weight: bolder;
-        font-size: calc(var(--bs-body-font-size) * 1.5);
         font-family: var(--bs-body-font-family), sans-serif;
+    }
+    :global(.select-rounded-right) {
+        border-top-right-radius: var(--bs-border-radius);
+        border-bottom-right-radius: var(--bs-border-radius);
+    }
+    :global(.select-rounded-left) {
+        border-top-left-radius: var(--bs-border-radius);
+        border-bottom-left-radius: var(--bs-border-radius);
     }
     :global(.workspace-card .card-body) {
         display:flex;

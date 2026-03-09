@@ -6,7 +6,7 @@
     import {onMount} from "svelte";
     import {
         addCommand, deleteCommand, getCommands, updateCommand, updateCategorie, setCurrentWorkspace,
-        getCurrentWorkspace, getTemplates, addTemplate, updateTemplate, exportAllData, importAllData, closeDb
+        getCurrentWorkspace, getTemplates, addTemplate,deleteTemplate, updateTemplate, exportAllData, importAllData, closeDb
     } from "$lib/db";
 
 
@@ -52,9 +52,26 @@
     // help modal
     let showHelpModal = false;
 
+    // themes
+    let currentTheme = 'atom-one-dark';
+    const CODE_THEMES = [
+        'atom-one-dark',
+        'atom-one-light',
+        'dark',
+        'github',
+        'github-dark',
+        '1c-light',
+        'a11y-dark',
+        'a11y-light',
+        'agate',
+        'an-old-hope',
+        'androidstudio',
+        'arduino-light',
+        'ascetic',
+    ];
     // delete modale
     let showDeleteModal = false;
-    let commandToDelete: { id: number; name: string } | null = null;
+    let commandToDelete: CmdItem|null = null;
 
     let itemToEdit:CmdItem|null = null;
     let showEditModal = false;
@@ -68,6 +85,7 @@
     let icon: string = 'bash';
 
     let addType = null;
+
     let formData:Command = {
         name: "",
         description: "",
@@ -142,17 +160,12 @@
         workspace = $currentWorkspace
         console.log(workspace,workspace?.id);
 
-        // commands = await getCommands(search, currentWorkspace);
         commands = await getCommands(search, workspace?.id ?? null);
         templates = await getTemplates(search, workspace?.id ?? null);
         commands = commands.map((c)=>{
             c.type = "command"
             return c
         })
-        // templates = templates.map((c)=>{
-        //     c.type = "template"
-        //     return c
-        // })
         grouped = [...commands, ...templates].reduce((acc, cmd:CmdItem) => {
             const key = cmd.icon || "default";
             acc[key] ||= [];
@@ -197,26 +210,6 @@
         await writeText(cmd);
         await appWindow?.hide();
     }
-    /*
-    {
-    "id": 10,
-    "name": "SQL",
-    "description": "une requete sql de test",
-    "content": "SELECT\n            t.*,\n            p.id as param_id,\n            p.type,\n            p.placeholder,\n            p.description as param_description,\n            p.name as param_name\n        FROM templates t\n        LEFT JOIN template_params p\n        ON p.template_id = t.id\n        WHERE (t.workspace_id = ? OR t.workspace_id IS NULL)\n        AND (t.name LIKE \"%{{search}}%\" OR t.description LIKE \"%{{search}}%\" OR t.icon LIKE \"%{{search}}%\")\n        ORDER BY t.name, p.id",
-    "icon": "sql.svg",
-    "workspace_id": 1,
-    "params": [
-        {
-            "id": 2,
-            "type": "text",
-            "placeholder": "search",
-            "description": "terme de recherche pour effectuer la requete",
-            "name": "Terme de recherche"
-        }
-    ],
-    "type": "template"
-}
-     */
 
     /**
      * verify if no modifier are pressed
@@ -230,14 +223,6 @@
      * global handler to catch keyboard events
      * @param e
      */
-    // function handleKeyup(e: KeyboardEvent) {
-    //     console.log('ctrl + f', e)
-    //     if(e.ctrlKey && e.key === "f"){
-    //         e.preventDefault();
-    //         toggleAdd(true)
-    //         focusInput(searchInput, true);
-    //     }
-    // }
     function handleKeydown(e: KeyboardEvent) {
         //e.stopPropagation();
         // Escape → close
@@ -256,20 +241,19 @@
             e.preventDefault();
             focusInput(searchInput, true);
         }
-
+        // pour éviter de toogle si l'on tape + dans l'input
+        const target = e.target as HTMLElement;
+        if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") {
+            return;
+        }
         // + → toggle add panel
         if (e.key === "+" || e.key === "=") {
-            // pour éviter de toogle si l'on tape + dans l'input
-            const target = e.target as HTMLElement;
-            if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") {
-                return;
-            }
             // (= correspond souvent à + sans shift)
             e.preventDefault();
             toggleAdd();
         }
         // h / space / tab → toggle help
-        if (noModifiersUsed(e) && (e.code === "KeyH" || e.code === "Space" || e.code === "Tab")) {
+        if (noModifiersUsed(e) && (e.code === "KeyH" || e.code === "Tab")) {
             e.preventDefault();
             toggleHelp();
         }
@@ -326,7 +310,7 @@
      * open delete modale
      * @param command
      */
-    function openDeleteModal(command: { id: number; name: string }) {
+    function openDeleteModal(command: CmdItem) {
         commandToDelete = command;
         showDeleteModal = true;
     }
@@ -346,27 +330,6 @@
         showDeleteModal = false;
         commandToDelete = null;
     }
-
-    /**
-     * close delete modale
-
-    function closeModifyModal () {
-        showModifyModal = false;
-        commandToModify = null;
-    }
-    */
-
-    /**
-     * confirm delete action and close Modal
-
-    async function updateCommandHandler() {
-        if (!commandToModify) return;
-
-        await updateCommand(commandToModify);
-        await refresh();
-
-        closeModifyModal();
-    }*/
 
     async function updateItemHandler() {
 
@@ -398,10 +361,13 @@
      */
     async function confirmDelete() {
         if (!commandToDelete) return;
+        if(commandToDelete.type === "command") {
+            await deleteCommand(commandToDelete?.id??0);
+        }else{
+            await deleteTemplate(commandToDelete.id??0);
+        }
 
-        await deleteCommand(commandToDelete.id);
         await refresh();
-
         closeDeleteModal();
     }
 
@@ -465,7 +431,7 @@
 
         for (const key in values) {
             const regex = new RegExp(`{{${key}}}`, "g");
-            const value = (!values[key] || values[key] === "") ?  `{{${key}}}` : values[key];
+            const value = (!values[key] || values[key] === "") ?  `${key}` : values[key];
             result = result.replace(regex, value);
 
         }
@@ -496,7 +462,7 @@
 
         allIcons = [ ...userIcons, ...icons];
         icon= allIcons[0] || 'bash';
-
+        currentTheme = localStorage.getItem("current_theme")??currentTheme;
         // workspace
         await initWorkspace();
         // !workspace
@@ -513,11 +479,6 @@
         searchInput = document.querySelector("#search-input");
         focusInput(searchInput, true);
 
-        // 🔥 focus à chaque affichage de la fenêtre
-        // const unlisten = await appWindow?.listen("tauri://focus", () => {
-        //     focusSearch();
-        // });
-
         // autostart ?
         autoStartEnabled = await isEnabled();
 
@@ -526,18 +487,6 @@
             // unlisten();
         };
     });
-    // function focusSearch() {
-    //     // requestAnimationFrame(() => {
-    //     //
-    //     // });
-    //     console.log('active element');
-    //     const activeElement = document.querySelector("#search-input:focus");
-    //     console.log(activeElement);
-    //     if(searchInput === activeElement) return;
-    //     searchInput?.focus();
-    //     searchInput?.select();
-    //     console.log("� focus search");
-    // }
     async function exportDatabase() {
 
         const data = await exportAllData();
@@ -584,6 +533,7 @@
         await refresh();
 
     }
+    let darkTheme:boolean = true;
 </script>
 
 
@@ -592,9 +542,9 @@
     {#if showAdd}
         <Row class="add-part mb-4 gx-2">
             <Col xs="12" md="6" lg="9">
-                <TabContent data-bs-theme="light" class="add-tabs">
+                <TabContent data-bs-theme="dark" class="add-tabs">
                     <TabPane tabId="commands" tab="➕ Commande" active>
-                        <Card class="p-3 add-card" theme="light">
+                        <Card class="p-3 add-card" theme="dark">
                             <CommandForm
                                     bind:data={formData}
                                     {allIcons}
@@ -605,7 +555,7 @@
                         </Card>
                     </TabPane>
                     <TabPane tabId="templates" tab="➕ Template">
-                        <Card class="p-3 add-card" theme="light">
+                        <Card class="p-3 add-card" theme="dark">
                             <TemplateForm
                                     bind:data={formDataTemplate}
                                     {allIcons}
@@ -619,14 +569,19 @@
 
             </Col>
             <Col xs="12" md="6" lg="3">
-                <InputGroup bsSize="sm" class="mb-2">
-                    <Input type="checkbox"
-                           bind:checked={autoStartEnabled}
-                           on:change={() => toggleAutoStart(autoStartEnabled)}
-                    />
-                    <span class="text-light">Lancer au démarrage</span>
-                </InputGroup>
-                <Card class="p-3 mt-3 workspace-card" theme="light">
+                <Card class="p-3 mb-2 workspace-card" theme="dark">
+                    <CardBody>
+                        <InputGroup bsSize="sm" class="">
+                            <Input type="checkbox"
+                                   bind:checked={autoStartEnabled}
+                                   on:change={() => toggleAutoStart(autoStartEnabled)}
+                            />
+                            <span class="text-light">Lancer au démarrage</span>
+                        </InputGroup>
+                    </CardBody>
+
+                </Card>
+                <Card class="p-3 workspace-card" theme="dark">
                     <CardHeader>
                         Environnement
                     </CardHeader>
@@ -639,7 +594,10 @@
                     </CardBody>
 
                 </Card>
-                <Card class="p-3 mt-2 data-card" theme="light">
+                <Card class="p-3 mt-2 data-card" theme="dark">
+                    <CardHeader>
+                        Importer/Exporter
+                    </CardHeader>
                     <CardBody class="flex-auto">
                         <Button class="flex-grow-1" color="primary" on:click={exportDatabase}>
                             Export JSON
@@ -647,6 +605,19 @@
                         <Button class="flex-grow-1" color="warning" on:click={saveCurrentDatabaseThenImport}>
                             Import JSON
                         </Button>
+                    </CardBody>
+
+                </Card>
+                <Card class="p-3 mt-2 data-card" theme="dark">
+                    <CardHeader>
+                        Theme du code
+                    </CardHeader>
+                    <CardBody class="flex-auto">
+                        <select class="input-group-select flex-grow-1" bind:value={currentTheme} on:change={()=>{localStorage.setItem("current_theme", currentTheme)}}>
+                            {#each CODE_THEMES as t }
+                                <option value={t}>{t}</option>
+                            {/each}
+                        </select>
                     </CardBody>
 
                 </Card>
@@ -714,7 +685,7 @@
                                         content="supprimer"
                                         delay={0}
                                         id="tooltip-btn-cmd-delete-{c.id}"
-                                        placement="auto"
+                                        placement="right"
                                         target="btn-cmd-delete-{c.id}"
                                         theme="dark"
                                 />
@@ -723,7 +694,7 @@
                                         content="modifier"
                                         delay={0}
                                         id="tooltip-btn-cmd-modify-{c.id}"
-                                        placement="auto"
+                                        placement="right"
                                         target="btn-cmd-modify-{c.id}"
                                         theme="dark"
                                 />
@@ -751,7 +722,7 @@
 <BaseModal open={showDeleteModal} onClose={closeDeleteModal} title="Confirmer">
     {#if commandToDelete}
         <p>
-            Supprimer la commande :
+            Supprimer {(commandToDelete.type === 'command')?'la commande':'le template'} :
             <strong>{commandToDelete.name}</strong> ?
         </p>
     {/if}
@@ -860,19 +831,23 @@
     </ModalBody>
 </Modal>
 <!-- !help Modal-->
+
 <!-- copy template Modal-->
-<BaseModal
+<BaseModal fullscreen={true}
         open={showCopyTemplateModal}
         title={templateToCopy?.name}
         onClose={() => showCopyTemplateModal=false}
 >
     {#if templateToCopy}
-        <h5>Parametres disponibles</h5>
+        <h6>Description</h6>
         <p>{templateToCopy?.description}</p>
         <hr>
         <h6>Prévisualisation</h6>
-        <pre><code  class="code-preview hljs dark language-{templateToCopy?.type??'sql'}">{@html templateContentPreview}</code></pre>
+        <div class="theme-{currentTheme}">
+          <pre><code class="code-preview hljs dark language-{templateToCopy?.type??'sql'}">{@html templateContentPreview}</code></pre>
+        </div>
         <hr>
+        <h6>Parametres disponibles</h6>
         {#each templateToCopy.params as p}
             <div class="mb-2">
                 <InputGroup bsSize="sm" id="tpl-{templateToCopy.id}-param-{p.id}">
@@ -887,7 +862,8 @@
                             bind:value={paramValues[p.placeholder]}
                             on:input={()=>{updateCopyTemplatePreview()}}
                     />
-                </InputGroup><Tooltip
+                </InputGroup>
+                <Tooltip
                     animation
                     content="{p.description}"
                     delay={0}

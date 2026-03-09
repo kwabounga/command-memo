@@ -5,7 +5,7 @@
         DropdownMenu,
         DropdownItem,
         Input,
-        Button
+        Button, InputGroup
     } from "@sveltestrap/sveltestrap";
 
     export let params = [];
@@ -81,7 +81,7 @@
     }
 </script>
 
-<ButtonDropdown id="{id}" isOpen={dropdownOpen} toggle={toggle}>
+<ButtonDropdown id="{id}" isOpen={dropdownOpen} toggle={toggle} class="mb-2">
 
     <DropdownToggle caret size="sm" color="info">
         Params ({params.length})

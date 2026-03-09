@@ -7,9 +7,9 @@
     import WorkspaceDropdown from "./WorkspaceDropdown.svelte";
     import { getWorkspaces } from "../db";
     import {  GLOBAL_WORKSPACE } from "../stores/workspace";
-    import type {CmdItem} from "$lib/types";
+    import type {CmdItem, Command, Workspace} from "$lib/types";
 
-    export let data:CmdItem = {
+    export let data:Command = {
         name: "",
         description: "",
         command: "",
@@ -23,7 +23,7 @@
     export let onSubmit: () => void;
     export let submitLabel = "Ajouter";
 
-    let workspace = null;
+    let workspace:Workspace|null = null;
     let workspaces = [];
 
 
@@ -67,7 +67,7 @@
             icons={allIcons}
             {userIcons}
     />
-    <InputGroup>
+    <InputGroup  class="mb-2">
         <span class="input-group-text"
         >Environnement</span>
         <WorkspaceDropdown
@@ -113,7 +113,8 @@
            name="cmd-input{ data?.id ? `-${data.id}` : '' }"
            placeholder="Commande"
            bind:value={data.command}
-           class="mb-2"/>
+           class="mb-2"
+           type="textarea"/>
     <Tooltip
             animation
             content="la commande qui sera copié dans le clipboard"
@@ -137,34 +138,6 @@
             target="cmd-btn-input{ data?.id ? `-${data.id}` : '' }"
             theme="light"
     />
-<!--    <input-->
-<!--            class="form-control mb-2"-->
-<!--            placeholder="Nom"-->
-<!--            bind:value={data.name}-->
-<!--    />-->
-
-<!--    <IconSelect-->
-<!--            bind:value={data.icon}-->
-<!--            icons={allIcons}-->
-<!--            {userIcons}-->
-<!--    />-->
-
-<!--    <input-->
-<!--            class="form-control mb-2"-->
-<!--            placeholder="Description"-->
-<!--            bind:value={data.description}-->
-<!--    />-->
-
-<!--    <input-->
-<!--            class="form-control mb-2"-->
-<!--            placeholder="Commande"-->
-<!--            bind:value={data.command}-->
-<!--    />-->
-
-<!--    <button class="btn btn-primary btn-sm" on:click={onSubmit}>-->
-<!--        {submitLabel}-->
-<!--    </button>-->
-
 </div>
 
 <!--Usage-->
