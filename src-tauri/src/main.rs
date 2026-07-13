@@ -45,6 +45,24 @@ fn ensure_icon_dir(app: &tauri::AppHandle) -> std::path::PathBuf {
     dir
 }
 
+// Sous Wayland, le curseur global n'est pas accessible (tao renvoie (0,0)) et
+// XGrabKey (global-hotkey) n'est pas relayé par le compositeur pour les apps
+// tierces : on bascule sur le moniteur primaire et on laisse le raccourci
+// clavier être déclenché depuis l'extérieur (voir tauri_plugin_single_instance).
+fn is_wayland() -> bool {
+    std::env::var("WAYLAND_DISPLAY").is_ok()
+}
+
+fn toggle_main_window(app: &tauri::AppHandle) {
+    let window = app.get_webview_window("main").unwrap();
+    let visible = window.is_visible().unwrap_or(false);
+    if visible {
+        let _ = window.hide();
+    } else {
+        let _ = show_on_active_monitor(app, &window);
+    }
+}
+
 fn load_config() -> AppConfig {
     let path = PathBuf::from("config.json");
 
@@ -81,6 +99,12 @@ fn get_user_icon_dir(app: tauri::AppHandle) -> String {
 
 fn main() {
     tauri::Builder::default()
+        // ✅ Single instance : doit être le premier plugin enregistré.
+        // Relance sur un raccourci clavier système (ex: GNOME Custom Shortcut)
+        // -> toggle la fenêtre déjà lancée au lieu d'ouvrir une 2e instance.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            toggle_main_window(app);
+        }))
         .plugin(tauri_plugin_autostart::Builder::new().build())
         // ✅ Clipboard Manager
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -99,14 +123,7 @@ fn main() {
                     match event.state {
                         ShortcutState::Pressed => {
                             println!("🔵 Pressed: {:?}", shortcut);
-                            let window = app.get_webview_window("main").unwrap();
-                            // ici tu peux show/hide la fenêtre
-                            let visible = window.is_visible().unwrap_or(false);
-                            if visible {
-                                let _ = window.hide();
-                            } else {
-                                let _ = show_on_active_monitor(app, &window);
-                            }
+                            toggle_main_window(app);
                         }
                         ShortcutState::Released => {
                             println!("⚪ Released: {:?}", shortcut);
@@ -269,6 +286,10 @@ fn main() {
         .expect("error while running tauri app");
 }
 
+fn first_available_monitor(app: &tauri::AppHandle) -> Option<tauri::Monitor> {
+    app.available_monitors().ok()?.into_iter().next()
+}
+
 fn monitor_from_cursor(app: &tauri::AppHandle) -> Option<tauri::Monitor> {
     let cursor_pos = app.cursor_position().ok()?;
 
@@ -288,7 +309,17 @@ fn show_on_active_monitor(
     app: &tauri::AppHandle,
     window: &tauri::WebviewWindow,
 ) -> tauri::Result<()> {
-    let monitor = monitor_from_cursor(app).or_else(|| window.primary_monitor().ok().flatten());
+    // Sous Wayland : la position du curseur n'est pas exposée globalement
+    // (tao renvoie toujours (0,0)) et `primary_monitor()` retourne toujours
+    // None côté GDK/Wayland (pas de notion de moniteur "primaire" dans le
+    // protocole Wayland). On prend donc le premier moniteur listé par
+    // `available_monitors()`, qui lui fonctionne indépendamment de la
+    // visibilité de la fenêtre et du backend d'affichage.
+    let monitor = if is_wayland() {
+        first_available_monitor(app)
+    } else {
+        monitor_from_cursor(app).or_else(|| window.primary_monitor().ok().flatten())
+    };
 
     if let Some(monitor) = monitor {
         let size = monitor.size();

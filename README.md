@@ -4,16 +4,16 @@
 [![Tauri Build & Release (Windows & Linux)](https://github.com/kwabounga/command-memo/actions/workflows/tauri-build.yml/badge.svg)](https://github.com/kwabounga/command-memo/actions/workflows/tauri-build.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)]
 
-**Command-Memo** est une application qui permet de prendre, organiser et retrouver facilement des mémos et commandes importantes. L’app combine la simplicité d’une note avec la puissance de l’organisation type “command prompt”.
+**Command-Memo** est une application qui permet de prendre, organiser et retrouver facilement des mémos et commandes importantes. L'app combine la simplicité d'une note avec la puissance de l'organisation type "command prompt".
 
 ---
 
 ## 📌 Fonctionnalités principales
 
-* Créer et gérer des mémos rapides
-* Organiser les mémos par catégories ou tags
-* Rechercher rapidement via des commandes ou mots-clés
-* Interface simple et moderne inspirée des apps de notes et des prompts de commande
+* Créer et gérer des mémos rapides (commandes) et des templates paramétrables
+* Organiser les mémos par catégories (icônes) et par workspaces
+* Rechercher rapidement via des mots-clés
+* Interface simple et moderne, accessible via un raccourci clavier global
 
 ---
 
@@ -21,7 +21,7 @@
 
 ### Prérequis
 
-* Node.js v18+ / npm ou yarn
+* Node.js v18+ / npm
 * Git
 * Rust + Cargo (pour Tauri)
 * Pour Windows : WSL2 recommandé pour dev côté Linux, mais build possible sur Windows natif
@@ -31,28 +31,23 @@
 ```bash
 git clone https://github.com/ton-utilisateur/command-memo.git
 cd command-memo
-npm install   # ou yarn install
+npm install
 ```
 
 ---
 
 ## 🛠️ Commandes de développement
 
-| Commande              | Description                                                 |
-| --------------------- | ----------------------------------------------------------- |
-| `npm run dev`         | Démarre l’application en mode développement Web (React)     |
-| `npm run tauri dev`   | Démarre l’application Tauri en mode développement (desktop) |
-| `npm run build`       | Compile le projet Web pour la production                    |
-| `npm run tauri build` | Génère le build Tauri (desktop) pour l’OS cible             |
-| `npm run start`       | Lance le projet Web ou desktop en production                |
-| `npm run lint`        | Vérifie le code avec linter (ESLint/Prettier)               |
-| `npm run test`        | Lance les tests unitaires                                   |
+| Commande              | Description                                                  |
+| ---------------------- | -------------------------------------------------------------|
+| `npm run dev`          | Démarre le frontend seul (SvelteKit/Vite), sans la coquille Tauri |
+| `npm run tauri dev`    | Démarre l'application complète en mode développement (desktop) |
+| `npm run build`        | Compile le frontend pour la production                       |
+| `npm run tauri build`  | Génère les installeurs desktop (`msi`, `deb`, `rpm`) pour l'OS cible |
+| `npm run check`        | Vérifie les types (svelte-check)                              |
+| `npm run check:watch`  | Idem, en mode watch                                            |
 
-### ⚠️ Subtilités pour Tauri / OS
-
-* **Développement WSL / Linux** : vous pouvez lancer `npm run tauri dev` directement dans WSL pour tester l’app desktop.
-* **Compilation Windows** : Rust et toolchain Windows nécessaires. Utiliser `npm run tauri build` depuis PowerShell ou WSL configuré avec cross-compilation.
-* **Build pour OS cible** : Tauri permet de compiler pour Windows, MacOS ou Linux depuis l’OS correspondant ou via cross-compilation si toolchain installée.
+Rust + Cargo sont requis dès que `tauri` est utilisé. Le build natif se fait depuis l'OS cible (ou via cross-compilation si la toolchain est installée) ; sous Windows, WSL peut servir pour le dev mais pas pour produire un build Windows.
 
 ---
 
@@ -60,45 +55,24 @@ npm install   # ou yarn install
 
 ```
 command-memo/
-│
-├─ src/                  # Code source de l'application
-│   ├─ components/       # Composants React
-│   ├─ pages/            # Pages principales
-│   ├─ hooks/            # Hooks personnalisés
-│   └─ styles/           # Fichiers CSS / Tailwind
-│
-├─ src-tauri/            # Code spécifique Tauri (Rust, config)
-├─ public/               # Assets publics (images, icônes, logos)
-├─ package.json          # Dépendances et scripts
-└─ README.md             # Documentation du projet
+├─ src/                  # Frontend SvelteKit
+│   ├─ routes/           # UI principale (+page.svelte)
+│   └─ lib/              # db.ts (accès SQL), types.ts, components/, stores/
+├─ src-tauri/            # Backend Rust/Tauri (main.rs, migrations SQL, tauri.conf.json)
+├─ static/               # Icônes SVG bundlées
+├─ package.json
+└─ README.md
 ```
-
----
-
-## 🔧 Développement
-
-* Lancer l’environnement Web : `npm run dev`
-* Lancer l’app desktop : `npm run tauri dev`
-* Ajouter un nouveau composant dans `src/components`
-* Gérer l’état global via React Context ou Zustand (selon implémentation)
-* Utiliser TailwindCSS pour le style rapide et responsive
 
 ---
 
 ## 📦 Build / Production
 
 ```bash
-# Build Web
-npm run build
-
-# Build Desktop (Tauri)
 npm run tauri build
 ```
 
-* Le build Web génère un dossier `dist` (ou `.next` si Next.js)
-* Le build Desktop génère l’exécutable pour l’OS cible (Windows, MacOS, Linux)
-* Déployer Web sur Vercel, Netlify ou serveur Node
-* Distribuer Desktop via l’exécutable Tauri
+Génère les installeurs (`msi`, `deb`, `rpm`) dans `src-tauri/target/release/bundle/`. C'est une application desktop uniquement — pas de déploiement web.
 
 ---
 
@@ -116,43 +90,74 @@ npm run tauri build
 * Logo minimaliste et moderne pour app de notes
 * Interface inspirée des apps comme Notion, Google Keep
 
+---
 
-## côté utilisateur
+## Côté utilisateur
 
-En fonction de l'os cible le dossier 'utilisateur' de l'application 
-ce trouve :
+En fonction de l'OS cible, le dossier de données de l'application se trouve :
 
-| Os                    | Path                                                          |
-|-----------------------|---------------------------------------------------------------|
-| `linux`               | /home/<user>/.local/share/com.jychaillou.command-memo/        |
-| `windows`             | C:\Users\<user>\AppData\Roaming\com.jychaillou.command-memo\  |
+| OS        | Path                                                          |
+|-----------|----------------------------------------------------------------|
+| `linux`   | `/home/<user>/.local/share/com.jychaillou.command-memo/`       |
+| `windows` | `C:\Users\<user>\AppData\Roaming\com.jychaillou.command-memo\` |
 
-### icons
-Pour ajouter des icons personnalisés, mettre des icon.svg dans :
-<dossier utilisateur>/icons
-### Config
+### Icônes personnalisées
+
+Pour ajouter des icônes custom, déposer des fichiers `icon.svg` dans le sous-dossier `icons/` de ce dossier de données (créé automatiquement au premier lancement s'il n'existe pas) :
+
+| OS        | Path                                                                  |
+|-----------|------------------------------------------------------------------------|
+| `linux`   | `~/.local/share/com.jychaillou.command-memo/icons/`                    |
+| `windows` | `%AppData%\com.jychaillou.command-memo\icons\` (soit `C:\Users\<user>\AppData\Roaming\com.jychaillou.command-memo\icons\`) |
+
+Seuls les fichiers `.svg` sont pris en compte.
+
+### Raccourci clavier sous Linux/Wayland
+
+Le raccourci global intégré (via `global-hotkey`/X11) **ne fonctionne pas sous une session Wayland** (GNOME, etc.) : Wayland empêche volontairement une app tierce d'intercepter une touche au niveau système. C'est une limitation de la plateforme, pas un bug de l'app. Ça fonctionne toujours normalement sous X11 (et sous Windows/macOS).
+
+Pour retrouver le même comportement (afficher/cacher la fenêtre) sous Wayland, il faut créer le raccourci **au niveau du bureau** (GNOME, KDE, etc.) plutôt que dans l'app :
+
+1. Paramètres système → Clavier → Raccourcis personnalisés (sous GNOME : *Paramètres > Clavier > Voir et personnaliser les raccourcis > Raccourcis personnalisés*).
+2. Créer un raccourci dont la commande est le binaire installé (ex. `/usr/bin/command-memo`), avec la combinaison de touches souhaitée.
+3. Grâce au mécanisme *single instance* de l'app, relancer le binaire alors qu'une instance tourne déjà ne lance pas une deuxième fenêtre : ça bascule simplement l'affichage (show/hide) de l'instance déjà en cours (celle démarrée par l'autostart, par exemple).
+
+### Config (raccourci clavier & offsets)
+
 ```json
-
-{ 
-    "shortcut": "CmdOrControl+Alt+F12", 
-    "offset_x": -9, 
-    "offset_y": -1 
-} 
+{
+    "shortcut": "CmdOrControl+Alt+F12",
+    "offset_x": -9,
+    "offset_y": -1
+}
 ```
-#### shortcuts
-pour les raccourcis / shortcuts, si le raccourci par default (Ctrl+Alt+Espace) est déja pris par le système,
-vous avez la possibilité de mettre un fichier config.json à côté de l'application pour surcharger la config
 
-un listing ce trouve ici :
+Le champ `shortcut` n'a d'effet que sous Windows, macOS et Linux/X11 (voir la limitation Wayland ci-dessus). Les offsets (`offset_x`/`offset_y`) s'appliquent partout : ils décalent la fenêtre par rapport au coin du moniteur choisi (celui sous le curseur sous X11/Windows/macOS, le moniteur primaire sous Wayland).
+
+⚠️ Important : contrairement au dossier de données ci-dessus, `config.json` **n'est pas résolu par Tauri** — le code le cherche avec un chemin relatif, donc dans le **répertoire de travail courant au lancement du process**, pas dans un emplacement fixe.
+
+* **Windows** : placer `config.json` dans le dossier d'installation, à côté du binaire (`.exe`). Ça fonctionne parce que le raccourci créé dans le menu Démarrer démarre avec ce dossier comme répertoire de travail.
+* **Linux** : **comportement non garanti actuellement**, ça dépend de comment l'app est lancée (terminal, entrée `.desktop`, autostart) et n'a pas encore été fiabilisé. Pistes :
+  * Lancer le binaire depuis un terminal en étant positionné dans le dossier où on veut mettre `config.json` (le cwd du terminal devient celui du process).
+  * Si un lanceur `.desktop` ou une entrée d'autostart est utilisée, vérifier/fixer son `Path=`/`WorkingDirectory=`.
+  * Une piste d'amélioration future serait de faire résoudre ce fichier par rapport au dossier de l'exécutable plutôt qu'au répertoire courant — pas encore fait.
+
+#### Shortcuts
+
+Pour les raccourcis/shortcuts, si le raccourci par défaut (`Ctrl+Alt+Espace`) est déjà pris par le système, on peut surcharger la config via ce `config.json`.
+
+Un listing des noms de touches valides se trouve ici :
 https://github.com/tauri-apps/global-hotkey/blob/c9913a97667b3e44cb000de384cd8937d5a0050a/src/hotkey.rs#L212
 
-#### offset 
-en fonction de l'écran des ajustements ( décalages ) sont peut-être à faire sur votre os 
+#### Offset
 
+En fonction de l'écran, des ajustements (décalages) sont peut-être à faire sur votre OS.
 
 --------
-## code pour du dev
-### autoalimenter la db pour faire des tests de front avec beaucoups d'éléments 
+
+## Code pour du dev
+
+### Auto-alimenter la DB pour faire des tests de front avec beaucoup d'éléments
 
 ```js
 /*    seed ( dev only ) */
