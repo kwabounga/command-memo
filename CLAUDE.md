@@ -30,6 +30,7 @@ Launcher desktop "spotlight-style" pour stocker et retrouver des commandes (shel
 | `src/lib/components/*.svelte` | `CommandForm`, `TemplateForm`, `TemplateParamsManager`, `CategoryHeader`, `IconSelect`, `WorkspaceDropdown`, `BaseModal` |
 | `src/lib/stores/workspace.ts` | Store du workspace courant + constante `GLOBAL_WORKSPACE` |
 | `src/lib/iconResolver.ts`, `src/lib/icons.ts` | Résolution des icônes (bundlées dans `static/assets/svg/` ou custom via `get_user_icon_dir`) |
+| `src/lib/styles/global.css` | Styles globaux (grille de commandes, cards, tabs...) importés depuis `+layout.svelte` — pas de `<style>` dans `+layout.svelte` lui-même (il ne rend qu'un `<slot/>`, rien à scoper localement) |
 | `src-tauri/src/main.rs` | Migrations SQL versionnées, config du raccourci global, tray, positionnement fenêtre |
 | `src-tauri/tauri.conf.json` | Config fenêtre / CSP / plugins |
 
@@ -59,13 +60,16 @@ Il n'existe **pas** de script `lint`, `test`, ni `start` — le `README.md` en m
 
 ## Limitation Wayland (Linux)
 
-Deux comportements diffèrent sous Wayland (confirmé sur GNOME) par rapport à Windows/macOS/X11 — ce sont des restrictions de la plateforme, pas des bugs de l'app :
+Trois comportements diffèrent sous Wayland (confirmé sur GNOME) par rapport à Windows/macOS/X11 — ce sont des restrictions de la plateforme, pas des bugs de l'app :
 
 - **Raccourci global** : `global-hotkey` (via `tauri-plugin-global-shortcut`) n'implémente que le grab X11 (`XGrabKey`, cf. `platform_impl/x11/mod.rs` du crate). Sous Wayland, le compositeur ne relaie pas les événements clavier globaux aux apps tierces, même via XWayland — le raccourci configuré dans `config.json` ne se déclenche donc jamais.
 - **Position par rapport au curseur** : `tao` (lib de fenêtrage de Tauri) renvoie `(0, 0)` en dur pour `cursor_position()` dès qu'il détecte Wayland (`platform_impl/linux/util.rs`) — Wayland n'expose pas la position globale du curseur par design.
+- **`set_position` sans effet** : le compositeur ignore toute demande de placement absolu d'un client Wayland (pas de coordonnées globales exposées à l'appli, contrairement à X11). Seul `set_size` a un effet ; le placement à l'écran est décidé entièrement par le compositeur (il centre le nouveau toplevel sur l'écran actif — celui qui a le focus clavier au moment du `show()`).
 
 **Fix appliqué** (`src-tauri/src/main.rs`) :
-- `is_wayland()` détecte la session via `WAYLAND_DISPLAY`. Si vrai, `show_on_active_monitor` saute `monitor_from_cursor` et utilise `first_available_monitor` (premier élément de `available_monitors()`) — **pas** `window.primary_monitor()` : celui-ci repose sur `gdk_display_get_primary_monitor()`, qui renvoie toujours `None` sous le backend GDK/Wayland (pas de notion de moniteur "primaire" dans le protocole Wayland lui-même). `current_monitor()` a le même problème tant que la fenêtre est cachée (tao retombe sur `primary_monitor()` si le `GdkWindow` n'est pas encore réalisé). `available_monitors()` fonctionne dans tous les cas car il ne dépend que du `Display`, pas de la fenêtre.
+- `is_wayland()` détecte la session via `WAYLAND_DISPLAY`.
+- `show_on_active_monitor` : sous Wayland, saute `monitor_from_cursor` et utilise `first_available_monitor` (premier élément de `available_monitors()`) pour le *premier* affichage — **pas** `window.primary_monitor()` : celui-ci repose sur `gdk_display_get_primary_monitor()`, qui renvoie toujours `None` côté GDK/Wayland (pas de notion de moniteur "primaire" dans le protocole lui-même). Cette taille est volontairement approximative (on ne sait pas encore sur quel écran le compositeur va poser la fenêtre) — c'est le mécanisme ci-dessous qui la corrige.
+- `PENDING_WAYLAND_RESIZE` (`AtomicBool`) + handler `WindowEvent::Focused(true)` : une fois la fenêtre effectivement mappée par le compositeur (c'est le premier moment où `current_monitor()` devient fiable — `current_monitor()`/`primary_monitor()` renvoient `None` tant que la fenêtre est cachée), `resize_to_current_monitor` compare la taille réelle de l'écran actif à la taille actuelle de la fenêtre. Si ça diffère : **cache la fenêtre, la redimensionne pendant qu'elle est cachée, puis la réaffiche** (`hide` → `set_size` → `show` → `set_focus`). Un simple `set_size` sans ce cycle hide/show ne suffit pas : comme `set_position` ne fait rien, le coin haut-gauche reste figé sur le mauvais centrage initial (fait avec la mauvaise taille), et un `set_size` seul fait juste grossir/rétrécir depuis ce point fixe — d'où un cadrage décalé (repéré empiriquement : décalage = moitié de la différence de dimensions entre les deux écrans). Réafficher force le compositeur à recentrer, et une fenêtre à la taille exacte de l'écran se recentre pile sur `(0,0)`.
 - Ajout de `tauri-plugin-single-instance` (premier plugin enregistré dans `main()`) : relancer le binaire alors qu'une instance tourne déjà appelle `toggle_main_window` sur l'instance existante au lieu d'ouvrir une 2e fenêtre. Ça permet, sous Wayland, de lier un raccourci clavier **au niveau du bureau** (ex. GNOME Custom Shortcut exécutant `/usr/bin/command-memo`) pour retrouver le toggle show/hide — voir le README, section "Raccourci clavier sous Linux/Wayland".
 - `toggle_main_window` factorise la logique show/hide, utilisée à la fois par le handler du raccourci global (Windows/macOS/X11) et par le callback single-instance (tous OS).
 
@@ -74,6 +78,7 @@ Deux comportements diffèrent sous Wayland (confirmé sur GNOME) par rapport à 
 - Aucun test (ni Rust `#[test]`, ni framework JS configuré).
 - UI et commentaires majoritairement en français ; noms de types/champs en anglais.
 - Le `README.md` contient encore quelques sections historiques à vérifier avant de s'y fier aveuglément (il a été partiellement corrigé, mais en cas de doute, le code fait foi).
+- Warning console au lancement sous Linux : `libayatana-appindicator is deprecated. Please use libayatana-appindicator-glib...` — vient de la lib système `libayatana-appindicator3` chargée par le crate `tray-icon` (dépendance Tauri, feature `tray-icon`), pas de notre code. Non actionnable côté app (la lib alternative `-glib` n'est même pas packagée sur les distros courantes actuellement) — purement cosmétique, à ignorer.
 
 ## Emplacements runtime (utilisateur)
 

@@ -631,7 +631,9 @@
                             id="icon-part"><img
                             src="/app-icon.svg"
                             width="20"
-                            height="20"/>
+                            height="20"
+                            alt="Command memo icon"
+                            />
                     </span>
                     <Input id="search-input"
                            name="search-input"
@@ -851,12 +853,12 @@
         {#each templateToCopy.params as p}
             <div class="mb-2">
                 <InputGroup bsSize="sm" id="tpl-{templateToCopy.id}-param-{p.id}">
-                    <label class="input-group-text">
+                    <label class="input-group-text" for="tpl-{templateToCopy.id}-param-{p.id}-input">
                         {p.name}
                     </label>
 
                     <Input
-
+                            id="tpl-{templateToCopy.id}-param-{p.id}-input"
                             type={p.type}
                             placeholder={p.placeholder}
                             bind:value={paramValues[p.placeholder]}

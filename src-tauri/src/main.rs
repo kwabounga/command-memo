@@ -3,10 +3,10 @@
 use serde::Deserialize;
 
 fn default_offset_x() -> i32 {
-    -9
+    0
 }
 fn default_offset_y() -> i32 {
-    -1
+    0
 }
 
 #[derive(Debug, Deserialize)]
@@ -24,6 +24,7 @@ use once_cell::sync::Lazy;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::path::BaseDirectory;
 use tauri::PhysicalPosition;
 use tauri::{
@@ -53,14 +54,47 @@ fn is_wayland() -> bool {
     std::env::var("WAYLAND_DISPLAY").is_ok()
 }
 
+// Sous Wayland, on ne connaît l'écran réel qu'une fois la fenêtre mappée par
+// le compositeur (il ignore nos set_position/appelle sa propre heuristique de
+// placement). Ce flag signale au handler `Focused(true)` qu'un resize post-show
+// est attendu, pour corriger la taille une fois `current_monitor()` fiable.
+static PENDING_WAYLAND_RESIZE: AtomicBool = AtomicBool::new(false);
+
 fn toggle_main_window(app: &tauri::AppHandle) {
     let window = app.get_webview_window("main").unwrap();
     let visible = window.is_visible().unwrap_or(false);
     if visible {
         let _ = window.hide();
     } else {
+        if is_wayland() {
+            PENDING_WAYLAND_RESIZE.store(true, Ordering::SeqCst);
+        }
         let _ = show_on_active_monitor(app, &window);
     }
+}
+
+// Sous Wayland, `set_position` n'a jamais d'effet (le compositeur ignore le
+// placement absolu demandé par le client). Le premier `show()` a donc centré
+// la fenêtre sur l'écran actif en se basant sur la mauvaise taille (celle du
+// premier moniteur listé, prise avant qu'on sache où elle allait apparaître) :
+// le coin haut-gauche reste figé sur ce mauvais centrage, même après
+// `set_size`. La seule façon de faire recentrer par le compositeur est de
+// cacher puis réafficher la fenêtre une fois qu'elle a la bonne taille — un
+// nouvel affichage à la taille exacte de l'écran se recentre pile sur (0,0).
+fn resize_to_current_monitor(window: &tauri::Window<Wry>) {
+    let Ok(Some(monitor)) = window.current_monitor() else {
+        return;
+    };
+    let size = *monitor.size();
+
+    if window.outer_size().map(|s| s == size).unwrap_or(false) {
+        return;
+    }
+
+    let _ = window.hide();
+    let _ = window.set_size(size);
+    let _ = window.show();
+    let _ = window.set_focus();
 }
 
 fn load_config() -> AppConfig {
@@ -273,14 +307,23 @@ fn main() {
             /* !tray part  */
             Ok(())
         })
-        .on_window_event(|app, event| {
-            let custom_shortcut =
-                Shortcut::from_str(&CONFIG.shortcut).expect("Invalid shortcut in config");
-            if let WindowEvent::CloseRequested { .. } = event {
+        .on_window_event(|window, event| match event {
+            WindowEvent::CloseRequested { .. } => {
                 // Désenregistre la hotkey à la fermeture
-                let shortcuts = app.state::<GlobalShortcut<Wry>>();
+                let custom_shortcut =
+                    Shortcut::from_str(&CONFIG.shortcut).expect("Invalid shortcut in config");
+                let shortcuts = window.state::<GlobalShortcut<Wry>>();
                 let _ = shortcuts.unregister(custom_shortcut);
             }
+            WindowEvent::Focused(true) => {
+                // La fenêtre vient d'être mappée par le compositeur : sous
+                // Wayland, c'est le premier moment où `current_monitor()` est
+                // fiable pour corriger la taille (voir PENDING_WAYLAND_RESIZE).
+                if PENDING_WAYLAND_RESIZE.swap(false, Ordering::SeqCst) {
+                    resize_to_current_monitor(window);
+                }
+            }
+            _ => {}
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri app");
