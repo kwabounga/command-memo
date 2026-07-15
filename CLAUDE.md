@@ -31,8 +31,10 @@ Launcher desktop "spotlight-style" pour stocker et retrouver des commandes (shel
 | `src/lib/stores/workspace.ts` | Store du workspace courant + constante `GLOBAL_WORKSPACE` |
 | `src/lib/iconResolver.ts`, `src/lib/icons.ts` | Résolution des icônes (bundlées dans `static/assets/svg/` ou custom via `get_user_icon_dir`) |
 | `src/lib/styles/global.css` | Styles globaux (grille de commandes, cards, tabs...) importés depuis `+layout.svelte` — pas de `<style>` dans `+layout.svelte` lui-même (il ne rend qu'un `<slot/>`, rien à scoper localement) |
+| `src/lib/updater.ts`, `src/lib/stores/updater.ts` | Check/apply de mise à jour (`checkForUpdate`, `applyUpdate`) et store associé — voir section "Mises à jour automatiques" |
 | `src-tauri/src/main.rs` | Migrations SQL versionnées, config du raccourci global, tray, positionnement fenêtre |
-| `src-tauri/tauri.conf.json` | Config fenêtre / CSP / plugins |
+| `src-tauri/tauri.conf.json` | Config fenêtre / CSP / plugins / bundle (targets, `createUpdaterArtifacts`) / `plugins.updater` |
+| `src-tauri/capabilities/main.json` | Seule capability réellement active (`tauri.conf.json` ne référence que `"main"`, pas `"default"`) — toute permission ACL (y compris `core:*`) doit être ajoutée ici, pas dans `default.json` |
 
 ## Modèle de données (SQLite, `commands.db`)
 
