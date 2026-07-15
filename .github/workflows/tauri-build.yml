@@ -130,11 +130,11 @@ jobs:
           npm version $env:VERSION --no-git-tag-version
 
           (Get-Content src-tauri/tauri.conf.json) `
-            -replace '"version":\s*".*"', '"version": "'+$env:VERSION+'"' `
+            -replace '"version":\s*".*"', ('"version": "' + $env:VERSION + '"') `
             | Set-Content src-tauri/tauri.conf.json
 
           (Get-Content src-tauri/Cargo.toml) `
-            -replace '^version = ".*"', 'version = "'+$env:VERSION+'"' `
+            -replace '^version = ".*"', ('version = "' + $env:VERSION + '"') `
             | Set-Content src-tauri/Cargo.toml
 
       - name: Install frontend deps
