@@ -7,6 +7,7 @@
     --bs-bg-opacity: 0.4;
 }
 .main-wrapper {
+    position: relative;
     background: transparent;
     /* background: #00000061;*/
     max-height: calc(100vh - var(--offset-main)) !important;
@@ -15,6 +16,16 @@
 
 .update-badge {
     cursor: pointer;
+}
+
+.app-version {
+    position: absolute;
+    bottom: 4px;
+    right: var(--bs-gutter-x);
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.35);
+    pointer-events: none;
+    user-select: none;
 }
 
 .command-grid {

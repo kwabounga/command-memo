@@ -35,7 +35,10 @@
     "dialog:allow-save",
     "dialog:default",
 
-    "updater:default"
+    "updater:default",
+    "process:default",
+
+    "core:app:allow-version"
 
   ]
 }

@@ -10,10 +10,11 @@
     } from "$lib/db";
 
 
-    import { save, open, confirm } from "@tauri-apps/plugin-dialog";
+    import { save, open, confirm, message } from "@tauri-apps/plugin-dialog";
     import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
     import {writeText} from "@tauri-apps/plugin-clipboard-manager";
     import {getCurrentWindow} from "@tauri-apps/api/window";
+    import {getVersion} from "@tauri-apps/api/app";
     import { enable, disable, isEnabled,  } from "@tauri-apps/plugin-autostart";
     import {
         Button,
@@ -43,6 +44,7 @@
     import { checkForUpdate, applyUpdate } from '$lib/updater';
 
     let appWindow:any;
+    let appVersion: string = "";
     let searchInput: HTMLInputElement | null = null;
 
     let search = "";
@@ -459,6 +461,7 @@
     onMount( async () => {
         console.log("🟢 Svelte mounted");
         appWindow = getCurrentWindow();
+        getVersion().then(v => appVersion = v).catch(e => console.warn("getVersion failed:", e));
         const list_icons = await invoke<string[]>("list_user_icons");
         userIcons = new Set(list_icons);
 
@@ -501,7 +504,12 @@
         });
         if (!ok) return;
 
-        await applyUpdate(update);
+        try {
+            await applyUpdate(update);
+        } catch (e) {
+            console.error("Update failed:", e);
+            await message(`Échec de la mise à jour :\n${e}`, { title: "Erreur", kind: "error" });
+        }
     }
     async function exportDatabase() {
 
@@ -742,6 +750,10 @@
             </div>
         {/each}
     </div>
+
+    {#if appVersion}
+        <span class="app-version">v{appVersion}</span>
+    {/if}
 
 </Container>
 <!-- !container -->

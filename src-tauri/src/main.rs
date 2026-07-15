@@ -141,6 +141,7 @@ fn main() {
         }))
         // ✅ Auto-update (msi Windows / AppImage Linux)
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_autostart::Builder::new().build())
         // ✅ Clipboard Manager
         .plugin(tauri_plugin_clipboard_manager::init())
