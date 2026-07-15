@@ -16,7 +16,9 @@
             id="icon-part"><img
             src="{resolveIconUrl(value, userIcons)}"
             width="20"
-            height="20"/>
+            height="20"
+            alt="Icon preview"
+            />
     </span>
     <Input
             id="icon-selector"

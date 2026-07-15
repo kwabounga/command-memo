@@ -51,7 +51,7 @@ Migrations versionnées dans `main.rs` (v1 → v4) via `tauri_plugin_sql::Migrat
 npm run dev            # vite dev (frontend seul, web)
 npm run tauri dev      # app desktop complète
 npm run build          # build frontend
-npm run tauri build    # build desktop (msi/deb/rpm)
+npm run tauri build    # build desktop (msi/deb/rpm/appimage)
 npm run check          # svelte-check
 npm run check:watch
 ```
@@ -77,7 +77,7 @@ Trois comportements diffèrent sous Wayland (confirmé sur GNOME) par rapport à
 
 - Aucun test (ni Rust `#[test]`, ni framework JS configuré).
 - UI et commentaires majoritairement en français ; noms de types/champs en anglais.
-- Le `README.md` contient encore quelques sections historiques à vérifier avant de s'y fier aveuglément (il a été partiellement corrigé, mais en cas de doute, le code fait foi).
+- Le `README.md` a été réécrit et vérifié (sections "utilisateur final" vs "développement" séparées) — fiable à jour, contrairement à ce qui a longtemps été le cas.
 - Warning console au lancement sous Linux : `libayatana-appindicator is deprecated. Please use libayatana-appindicator-glib...` — vient de la lib système `libayatana-appindicator3` chargée par le crate `tray-icon` (dépendance Tauri, feature `tray-icon`), pas de notre code. Non actionnable côté app (la lib alternative `-glib` n'est même pas packagée sur les distros courantes actuellement) — purement cosmétique, à ignorer.
 
 ## Mises à jour automatiques
@@ -86,9 +86,26 @@ Basé sur `tauri-plugin-updater` (mode "static JSON") :
 
 - Check silencieux au démarrage (`checkForUpdate()` dans `src/lib/updater.ts`, appelé depuis `onMount` dans `src/routes/+page.svelte`), pas de popup bloquante. Si une MAJ est trouvée, un petit badge 🔔 apparaît à côté de la barre de recherche (`$updateInfo.available`, store `src/lib/stores/updater.ts`) ; au clic, confirmation via `@tauri-apps/plugin-dialog` puis `update.downloadAndInstall()` + `relaunch()` (`@tauri-apps/plugin-process`).
 - Le endpoint du manifest est `plugins.updater.endpoints` dans `src-tauri/tauri.conf.json` : pointe sur `https://github.com/kwabounga/command-memo/releases/latest/download/latest.json`, généré automatiquement à chaque release taguée par `tauri-apps/tauri-action` (voir `.github/workflows/tauri-build.yml`, job `release`).
-- **Limitation Linux** : le plugin ne sait auto-updater que le format **AppImage** — pas les `.deb`/`.rpm`. `bundle.targets` inclut donc `appimage` en plus de `msi`/`deb`/`rpm` ; les utilisateurs deb/rpm gardent une mise à jour manuelle (retélécharger le paquet), seuls ceux qui utilisent l'AppImage bénéficient de l'auto-update. Sous Windows, `msi` est bien supporté par l'updater.
-- Signature : la clé privée de signature (générée via `tauri signer generate`, jamais commitée) est stockée dans les secrets GitHub du repo (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) ; la clé publique correspondante est dans `plugins.updater.pubkey` (`tauri.conf.json`).
+- **Limitation Linux** : le plugin ne sait auto-updater que le format **AppImage** — pas les `.deb`/`.rpm`. `bundle.targets` inclut donc `appimage` en plus de `msi`/`deb`/`rpm` ; les utilisateurs deb/rpm gardent une mise à jour manuelle (retélécharger le paquet), seuls ceux qui utilisent l'AppImage bénéficient de l'auto-update. Sous Windows, `msi` est bien supporté par l'updater — **validé en conditions réelles** (cycle complet check → badge → confirmation → download → install → relaunch).
+- Signature : la clé privée de signature (générée via `tauri signer generate`, jamais commitée) est stockée dans les secrets GitHub du repo, en **Repository secrets** (pas *Environment secrets*, qui ne sont jamais injectés puisque les jobs du workflow ne déclarent pas d'`environment:`) : `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` ; la clé publique correspondante est dans `plugins.updater.pubkey` (`tauri.conf.json`).
+- `relaunch()` (`@tauri-apps/plugin-process`) nécessite son propre plugin Rust (`tauri-plugin-process`) **et** la permission `process:default` dans `capabilities/main.json` — installer seulement le package JS ne suffit pas (erreur runtime silencieuse type "Command plugin:process|restart not allowed by ACL" sinon).
 - macOS reste hors scope (le CI ne le build pas).
+- **3 variantes buildées par release taguée** (voir `.github/workflows/tauri-build.yml`, jobs `release`/`release-linux-latest`) : Windows `msi`/Linux `deb`/`rpm`/`appimage` sur `ubuntu-22.04` (wired dans `latest.json`, auto-update actif), + un 3e AppImage "bleeding-edge" buildé sur `ubuntu-latest` et publié sous un nom distinct (`productName` patché en "Command memo Latest" pour ce job) — **volontairement non wired dans `latest.json`** (le manifest updater ne gère qu'une URL par plateforme), téléchargement manuel uniquement. Voir section suivante pour le pourquoi.
+
+## Limitation AppImage sur systèmes Linux très récents (GTK bundlé trop vieux)
+
+Sur du matériel/OS très récent (confirmé : GPU AMD "Granite Ridge"/Zen 5 + Ubuntu 26.04, GTK3 système 3.24.52), **toute** AppImage produite par un runner GitHub Actions (testé : `ubuntu-22.04`, `ubuntu-24.04`, `ubuntu-latest` — tous identiques) plante au rendu : le process principal démarre et affiche la fenêtre/tray normalement, mais le **WebProcess** (sous-process WebKitGTK qui peint réellement le DOM) crashe avec `Could not create default EGL display: EGL_BAD_PARAMETER. Aborting...`, laissant une fenêtre vide. Symptôme annexe convergent : `libgvfscommon.so: undefined symbol: g_variant_builder_init_static` (une lib **système** qui échoue à se lier contre le glib **bundlé**, plus ancien).
+
+Root cause identifiée par extraction manuelle de l'AppImage (`--appimage-extract`) et comparaison de versions : `linuxdeploy-plugin-gtk` bundle GTK3 **3.24.41** dans l'AppImage (capturé sur le runner CI), largement derrière la version système de la machine affectée (3.24.52). Le code de négociation EGL/Wayland vit dans GDK (GTK3), pas dans webkit2gtk — d'où le crash dès que le GTK bundlé est trop vieux pour le compositeur/Mesa/GPU de la machine hôte.
+
+Pistes déjà **écartées** (testées, sans effet) :
+- `WEBKIT_DISABLE_DMABUF_RENDERER=1`, `LIBGL_ALWAYS_SOFTWARE=1`, `WEBKIT_DISABLE_COMPOSITING_MODE=1` (variables d'env au lancement)
+- Contourner le hack `GDK_BACKEND=x11` forcé par `linuxdeploy-plugin-gtk.sh` (le hook source dans `AppRun`, en le re-sourçant puis en réexportant `GDK_BACKEND=wayland` derrière) — même erreur
+- Changer la base du runner CI (22.04 → 24.04 → latest) — même erreur sur les trois
+
+Seul un **build fait directement sur la machine affectée** (capturant ses propres libs à jour) fonctionne correctement — confirmé empiriquement. Aucun runner GitHub Actions hébergé n'a actuellement un GTK3/glib assez récent pour ce type de matériel bleeding-edge. Le `.deb`/`.rpm` ne sont **pas** concernés (ils utilisent les libs système, jamais de GTK bundlé) — c'est pourquoi le fallback recommandé pour un utilisateur touché par ce problème est de rester sur `.deb`/`.rpm` (mise à jour manuelle) plutôt que l'AppImage.
+
+Piste non tentée (jugée disproportionnée pour un cas isolé) : builder dans un conteneur CI basé sur une distro rolling-release (Arch, Debian testing) pour capturer un GTK/glib nettement plus récent qu'une Ubuntu LTS figée.
 
 ## Emplacements runtime (utilisateur)
 
