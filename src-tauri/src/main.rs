@@ -139,6 +139,8 @@ fn main() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             toggle_main_window(app);
         }))
+        // ✅ Auto-update (msi Windows / AppImage Linux)
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::Builder::new().build())
         // ✅ Clipboard Manager
         .plugin(tauri_plugin_clipboard_manager::init())

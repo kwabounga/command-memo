@@ -33,7 +33,9 @@
 
     "dialog:allow-open",
     "dialog:allow-save",
-    "dialog:default"
+    "dialog:default",
+
+    "updater:default"
 
   ]
 }

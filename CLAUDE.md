@@ -80,6 +80,16 @@ Trois comportements diffèrent sous Wayland (confirmé sur GNOME) par rapport à
 - Le `README.md` contient encore quelques sections historiques à vérifier avant de s'y fier aveuglément (il a été partiellement corrigé, mais en cas de doute, le code fait foi).
 - Warning console au lancement sous Linux : `libayatana-appindicator is deprecated. Please use libayatana-appindicator-glib...` — vient de la lib système `libayatana-appindicator3` chargée par le crate `tray-icon` (dépendance Tauri, feature `tray-icon`), pas de notre code. Non actionnable côté app (la lib alternative `-glib` n'est même pas packagée sur les distros courantes actuellement) — purement cosmétique, à ignorer.
 
+## Mises à jour automatiques
+
+Basé sur `tauri-plugin-updater` (mode "static JSON") :
+
+- Check silencieux au démarrage (`checkForUpdate()` dans `src/lib/updater.ts`, appelé depuis `onMount` dans `src/routes/+page.svelte`), pas de popup bloquante. Si une MAJ est trouvée, un petit badge 🔔 apparaît à côté de la barre de recherche (`$updateInfo.available`, store `src/lib/stores/updater.ts`) ; au clic, confirmation via `@tauri-apps/plugin-dialog` puis `update.downloadAndInstall()` + `relaunch()` (`@tauri-apps/plugin-process`).
+- Le endpoint du manifest est `plugins.updater.endpoints` dans `src-tauri/tauri.conf.json` : pointe sur `https://github.com/kwabounga/command-memo/releases/latest/download/latest.json`, généré automatiquement à chaque release taguée par `tauri-apps/tauri-action` (voir `.github/workflows/tauri-build.yml`, job `release`).
+- **Limitation Linux** : le plugin ne sait auto-updater que le format **AppImage** — pas les `.deb`/`.rpm`. `bundle.targets` inclut donc `appimage` en plus de `msi`/`deb`/`rpm` ; les utilisateurs deb/rpm gardent une mise à jour manuelle (retélécharger le paquet), seuls ceux qui utilisent l'AppImage bénéficient de l'auto-update. Sous Windows, `msi` est bien supporté par l'updater.
+- Signature : la clé privée de signature (générée via `tauri signer generate`, jamais commitée) est stockée dans les secrets GitHub du repo (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) ; la clé publique correspondante est dans `plugins.updater.pubkey` (`tauri.conf.json`).
+- macOS reste hors scope (le CI ne le build pas).
+
 ## Emplacements runtime (utilisateur)
 
 - Linux : `~/.local/share/com.jychaillou.command-memo/` (icônes custom dans `icons/`)

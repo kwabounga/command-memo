@@ -10,7 +10,7 @@
     } from "$lib/db";
 
 
-    import { save, open } from "@tauri-apps/plugin-dialog";
+    import { save, open, confirm } from "@tauri-apps/plugin-dialog";
     import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
     import {writeText} from "@tauri-apps/plugin-clipboard-manager";
     import {getCurrentWindow} from "@tauri-apps/api/window";
@@ -39,6 +39,8 @@
     import {icons} from "$lib/icons";
     import {invoke} from "@tauri-apps/api/core";
     import { currentWorkspace, initWorkspace } from '$lib/stores/workspace';
+    import { updateInfo } from '$lib/stores/updater';
+    import { checkForUpdate, applyUpdate } from '$lib/updater';
 
     let appWindow:any;
     let searchInput: HTMLInputElement | null = null;
@@ -482,11 +484,25 @@
         // autostart ?
         autoStartEnabled = await isEnabled();
 
+        // check silencieux d'une mise à jour, sans bloquer le démarrage
+        checkForUpdate();
+
         return () => {
             window.removeEventListener("keydown", handleKeydown);
             // unlisten();
         };
     });
+    async function onUpdateClick() {
+        const { available, version, update } = $updateInfo;
+        if (!available || !update) return;
+
+        const ok = await confirm(`Une nouvelle version (v${version}) est disponible. Mettre à jour maintenant ?`, {
+            title: "Mise à jour disponible"
+        });
+        if (!ok) return;
+
+        await applyUpdate(update);
+    }
     async function exportDatabase() {
 
         const data = await exportAllData();
@@ -640,6 +656,16 @@
                            placeholder="Recherche"
                            bind:value={search}
                            on:input={refresh}/>
+                    {#if $updateInfo.available}
+                        <span
+                                class="input-group-text update-badge"
+                                title={`Mettre à jour vers v${$updateInfo.version}`}
+                                role="button"
+                                tabindex="0"
+                                on:click={onUpdateClick}
+                                on:keydown={(e) => (e.key === 'Enter' || e.key === ' ') && onUpdateClick()}
+                        >🔔</span>
+                    {/if}
         </InputGroup>
     </div>
 
