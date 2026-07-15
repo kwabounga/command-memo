@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
+        os: [ubuntu-22.04, windows-latest]
         node: [20]
 
     runs-on: ${{ matrix.os }}
@@ -78,7 +78,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
+        os: [ubuntu-22.04, windows-latest]
 
     runs-on: ${{ matrix.os }}
 
@@ -154,3 +154,72 @@ jobs:
           releaseName: 'Command Memo v__VERSION__'
           generateReleaseNotes: true
           uploadUpdaterJson: true
+
+
+  # -------------------------------------------------
+  # Extra Linux AppImage built on the newest available runner, for very
+  # recent hardware/distros where the standard ubuntu-22.04-based AppImage
+  # bundles a GTK3 too old to negotiate EGL correctly (bundled 3.24.41 vs.
+  # a modern system's 3.24.52+ — confirmed root cause of a blank/crashing
+  # webview on recent AMD GPUs). NOT wired into latest.json: manual
+  # download only, no auto-update for this variant.
+  # -------------------------------------------------
+  release-linux-latest:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        shell: bash
+        run: |
+          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+          echo "Detected version $VERSION"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            pkg-config \
+            libssl-dev
+
+      - name: Set version and distinct product name
+        run: |
+          echo "Patching version to $VERSION, productName to avoid asset collision"
+          npm version $VERSION --no-git-tag-version
+          sed -i 's/"version": *"[^"]*"/"version": "'$VERSION'"/' src-tauri/tauri.conf.json
+          sed -i 's/^version = .*/version = "'$VERSION'"/' src-tauri/Cargo.toml
+          sed -i 's/"productName": *"[^"]*"/"productName": "Command memo Latest"/' src-tauri/tauri.conf.json
+
+      - name: Install frontend deps
+        run: npm ci
+
+      - name: Build, sign & publish AppImage (bleeding-edge)
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Command Memo v__VERSION__'
+          args: --bundles appimage
+          uploadUpdaterJson: false
